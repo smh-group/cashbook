@@ -439,7 +439,7 @@ function downloadExcel(){
     const netFormula=`=${incCol}${r}-${expCol}${r}`;
 
     // Helper: write a formula cell correctly for xlsx-js-style
-    const fCell=(formula,style)=>({f:formula.replace(/^=/,''),t:'n',z:'£#,##0.00',s:style});
+    const fCell=(formula,style)=>({v:formula.startsWith('=')?formula:'='+formula,t:'n',z:'£#,##0.00',s:style});
     const tCell=(val,style)=>({v:val,t:'s',s:style});
     const amtStyle={font:xlFont(false,10,C.BLACK),fill:xlFill(C.GRAY_50),alignment:xlAlign('right'),border:xlBorder()};
     const lblStyle={font:xlFont(false,10,C.BLACK),fill:xlFill(C.GRAY_50),alignment:xlAlign('left'),border:xlBorder()};
@@ -466,7 +466,7 @@ function downloadExcel(){
     if(ci===0){wss[`${col}${tr}`]={v:'TOTAL',t:'s',s:{font:xlFont(true,10),fill:xlFill(C.LIGHT_BLUE),border:xlBorder()}};}
     else if(ci===1||ci===sumCols.length-2){}// opening/closing blanks
     else{
-      wss[`${col}${tr}`]={f:`SUM(${col}4:${col}${sumMaxRow})`,t:'n',z:'£#,##0.00',s:{font:xlFont(true,10),fill:xlFill(C.LIGHT_BLUE),alignment:xlAlign('right'),border:xlBorder()}};
+      wss[`${col}${tr}`]={v:`=SUM(${col}4:${col}${sumMaxRow})`,t:'n',z:'£#,##0.00',s:{font:xlFont(true,10),fill:xlFill(C.LIGHT_BLUE),alignment:xlAlign('right'),border:xlBorder()}};
     }
     if(!wss[`${col}${tr}`])wss[`${col}${tr}`]={v:'',t:'s',s:{fill:xlFill(C.LIGHT_BLUE),border:xlBorder()}};
   });
@@ -523,7 +523,7 @@ function downloadExcel(){
     ws[`A${r}`]={v:'Total Income',t:'s',s:{font:xlFont(true,10),fill:xlFill(C.GREEN_BG),alignment:xlAlign('right'),border:xlBorder()}};
     ws[`B${r}`]={v:'',t:'s',s:{fill:xlFill(C.GREEN_BG),border:xlBorder()}};
     ws[`C${r}`]={v:'',t:'s',s:{fill:xlFill(C.GREEN_BG),border:xlBorder()}};
-    ws[`D${r}`]={f:`SUM(D${incStart}:D${incEnd})`,t:'n',z:'£#,##0.00',s:{font:xlFont(true,10),fill:xlFill(C.GREEN_BG),alignment:xlAlign('right'),border:xlBorder()}};
+    ws[`D${r}`]={v:`=SUM(D${incStart}:D${incEnd})`,t:'n',z:'£#,##0.00',s:{font:xlFont(true,10),fill:xlFill(C.GREEN_BG),alignment:xlAlign('right'),border:xlBorder()}};
     ws[`E${r}`]={v:'',t:'s',s:{fill:xlFill(C.GREEN_BG),border:xlBorder()}};
     ws['!merges'].push({s:{r:r-1,c:0},e:{r:r-1,c:2}});
     const incTotalRow=r;r+=2;
@@ -550,7 +550,7 @@ function downloadExcel(){
     ws[`A${r}`]={v:'Total Expenses',t:'s',s:{font:xlFont(true,10),fill:xlFill(C.RED_BG),alignment:xlAlign('right'),border:xlBorder()}};
     ws[`B${r}`]={v:'',t:'s',s:{fill:xlFill(C.RED_BG),border:xlBorder()}};
     ws[`C${r}`]={v:'',t:'s',s:{fill:xlFill(C.RED_BG),border:xlBorder()}};
-    ws[`D${r}`]={f:`SUM(D${expStart}:D${expEnd})`,t:'n',z:'£#,##0.00',s:{font:xlFont(true,10),fill:xlFill(C.RED_BG),alignment:xlAlign('right'),border:xlBorder()}};
+    ws[`D${r}`]={v:`=SUM(D${expStart}:D${expEnd})`,t:'n',z:'£#,##0.00',s:{font:xlFont(true,10),fill:xlFill(C.RED_BG),alignment:xlAlign('right'),border:xlBorder()}};
     ws[`E${r}`]={v:'',t:'s',s:{fill:xlFill(C.RED_BG),border:xlBorder()}};
     ws['!merges'].push({s:{r:r-1,c:0},e:{r:r-1,c:2}});
     const expTotalRow=r;r+=2;
@@ -580,7 +580,7 @@ function downloadExcel(){
       ws[`A${r}`]={v:lbl,t:'s',s:{font:xlFont(ri===3||isDiff),fill:xlFill(C.LIGHT_BLUE),border:xlBorder()}};
       ws[`B${r}`]={v:'',t:'s',s:{fill:xlFill(C.LIGHT_BLUE),border:xlBorder()}};
       ws[`C${r}`]={v:'',t:'s',s:{fill:xlFill(C.LIGHT_BLUE),border:xlBorder()}};
-      ws[`D${r}`]={f:formula,t:'n',z:'£#,##0.00',s:{font:xlFont(ri===3||isDiff,10,isDiff?C.RED_TEXT:C.BLACK),fill:xlFill(C.LIGHT_BLUE),alignment:xlAlign('right'),border:xlBorder()}};
+      ws[`D${r}`]={v:'='+formula,t:'n',z:'£#,##0.00',s:{font:xlFont(ri===3||isDiff,10,isDiff?C.RED_TEXT:C.BLACK),fill:xlFill(C.LIGHT_BLUE),alignment:xlAlign('right'),border:xlBorder()}};
       ws[`E${r}`]={v:'',t:'s',s:{fill:xlFill(C.LIGHT_BLUE),border:xlBorder()}};
       ws['!merges'].push({s:{r:r-1,c:0},e:{r:r-1,c:2}},{s:{r:r-1,c:3},e:{r:r-1,c:4}});
       r++;
@@ -591,7 +591,7 @@ function downloadExcel(){
     XLSX.utils.book_append_sheet(wb,ws,m.substring(0,31));
   });
 
-  XLSX.writeFile(wb,'cash_book.xlsx');
+  XLSX.writeFile(wb,'cash_book.xlsx',{cellFormula:true,bookSST:false});
   showStatus('sb2','ok','✓ Excel downloaded with full formatting — correct it then upload below');
 }
 
