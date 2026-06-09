@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cash Book Extractor</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --blue:       #2563EB;
+    --blue-dark:  #1D4ED8;
+    --blue-light: #DBEAFE;
+    --green:      #16A34A;
+    --green-light:#DCFCE7;
+    --red:        #DC2626;
+    --red-light:  #FEE2E2;
+    --amber:      #D97706;
+    --amber-light:#FEF3C7;
+    --gray-50:    #F9FAFB;
+    --gray-100:   #F3F4F6;
+    --gray-200:   #E5E7EB;
+    --gray-400:   #9CA3AF;
+    --gray-600:   #4B5563;
+    --gray-800:   #1F2937;
+    --radius:     8px;
+    --shadow:     0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
+  }
+
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; color: var(--gray-800); background: #F0F4F8; min-height: 100vh; }
+
+  header { background: #1E3A5F; color: white; padding: 16px 24px; display: flex; align-items: center; gap: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+  header h1 { font-size: 18px; font-weight: 600; }
+  header span { font-size: 12px; opacity: 0.7; margin-top: 2px; }
+
+  .container { max-width: 1100px; margin: 0 auto; padding: 24px 20px; }
+
+  /* Steps */
+  .steps { display: flex; gap: 0; margin-bottom: 24px; background: white; border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+  .step { flex: 1; padding: 14px 16px; display: flex; align-items: center; gap: 10px; cursor: pointer; border-right: 1px solid var(--gray-200); color: var(--gray-400); font-size: 13px; font-weight: 500; transition: background 0.15s; }
+  .step:last-child { border-right: none; }
+  .step.active { background: var(--blue-light); color: var(--blue); }
+  .step.done { color: var(--green); }
+  .step-num { width: 24px; height: 24px; border-radius: 50%; background: var(--gray-200); color: var(--gray-600); font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .step.active .step-num { background: var(--blue); color: white; }
+  .step.done .step-num { background: var(--green); color: white; }
+
+  /* Cards */
+  .card { background: white; border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px; margin-bottom: 16px; }
+  .card-title { font-size: 15px; font-weight: 600; margin-bottom: 14px; color: var(--gray-800); }
+
+  /* Upload zone */
+  .upload-zone { border: 2px dashed var(--gray-200); border-radius: var(--radius); padding: 32px; text-align: center; cursor: pointer; transition: all 0.15s; background: var(--gray-50); }
+  .upload-zone:hover, .upload-zone.drag { border-color: var(--blue); background: var(--blue-light); }
+  .upload-zone svg { width: 40px; height: 40px; color: var(--gray-400); margin-bottom: 10px; }
+  .upload-zone p { font-size: 14px; color: var(--gray-600); margin-bottom: 4px; }
+  .upload-zone small { font-size: 12px; color: var(--gray-400); }
+  #fileInput { display: none; }
+
+  /* File list */
+  .file-list { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+  .file-row { display: flex; align-items: center; gap: 12px; background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: var(--radius); padding: 10px 14px; }
+  .file-row .pdf-icon { width: 32px; height: 32px; background: #FEE2E2; border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .file-row .pdf-icon svg { width: 18px; height: 18px; color: var(--red); }
+  .file-row .name { flex: 1; font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .file-row select { font-size: 12px; padding: 4px 8px; border: 1px solid var(--gray-200); border-radius: 6px; background: white; color: var(--gray-800); cursor: pointer; }
+  .file-row select.unset { border-color: var(--red); color: var(--gray-400); }
+  .badge-warn { font-size: 11px; background: var(--amber-light); color: var(--amber); padding: 2px 8px; border-radius: 20px; white-space: nowrap; }
+  .badge-ok { font-size: 11px; background: var(--green-light); color: var(--green); padding: 2px 8px; border-radius: 20px; white-space: nowrap; }
+  .rm { background: none; border: none; cursor: pointer; color: var(--gray-400); padding: 4px; border-radius: 4px; display: flex; align-items: center; }
+  .rm:hover { color: var(--red); background: var(--red-light); }
+
+  /* Options row */
+  .opts { display: flex; gap: 12px; margin-top: 14px; flex-wrap: wrap; }
+  .opt-group { flex: 1; min-width: 140px; }
+  .opt-group label { display: block; font-size: 12px; font-weight: 500; color: var(--gray-600); margin-bottom: 5px; }
+  .opt-group select, .opt-group input[type=text] { width: 100%; padding: 8px 10px; border: 1px solid var(--gray-200); border-radius: var(--radius); font-size: 13px; color: var(--gray-800); background: white; }
+  .opt-group input[type=text]:focus, .opt-group select:focus { outline: none; border-color: var(--blue); }
+
+  /* API key section */
+  .api-section { background: var(--amber-light); border: 1px solid #FCD34D; border-radius: var(--radius); padding: 14px 16px; margin-bottom: 16px; }
+  .api-section label { display: block; font-size: 12px; font-weight: 600; color: var(--amber); margin-bottom: 6px; }
+  .api-key-row { display: flex; gap: 8px; }
+  .api-key-row input { flex: 1; padding: 8px 10px; border: 1px solid #FCD34D; border-radius: var(--radius); font-size: 13px; font-family: monospace; background: white; }
+  .api-key-row input:focus { outline: none; border-color: var(--blue); }
+  .api-section small { display: block; margin-top: 6px; font-size: 11px; color: var(--amber); }
+
+  /* Buttons */
+  .btn { padding: 9px 18px; border-radius: var(--radius); font-size: 13px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; border: 1px solid transparent; transition: all 0.15s; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-primary { background: var(--blue); color: white; border-color: var(--blue); }
+  .btn-primary:hover:not(:disabled) { background: var(--blue-dark); }
+  .btn-success { background: var(--green); color: white; border-color: var(--green); }
+  .btn-success:hover:not(:disabled) { background: #15803D; }
+  .btn-outline { background: white; color: var(--gray-800); border-color: var(--gray-200); }
+  .btn-outline:hover:not(:disabled) { background: var(--gray-50); }
+  .btn-sm { padding: 6px 12px; font-size: 12px; }
+  .action-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 16px; }
+
+  /* Status */
+  .status { padding: 10px 14px; border-radius: var(--radius); font-size: 13px; display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+  .status.info { background: var(--blue-light); color: var(--blue); }
+  .status.ok { background: var(--green-light); color: var(--green); }
+  .status.err { background: var(--red-light); color: var(--red); }
+  .status.warn { background: var(--amber-light); color: var(--amber); }
+  .spinner { width: 15px; height: 15px; border: 2px solid rgba(37,99,235,0.3); border-top-color: var(--blue); border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Summary cards */
+  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .sum-card { background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: var(--radius); padding: 14px; text-align: center; }
+  .sum-card .lbl { font-size: 11px; color: var(--gray-600); margin-bottom: 5px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; }
+  .sum-card .val { font-size: 20px; font-weight: 700; }
+  .val-green { color: var(--green); }
+  .val-red { color: var(--red); }
+  .val-blue { color: var(--blue); }
+
+  /* Table */
+  .table-wrap { overflow-x: auto; border: 1px solid var(--gray-200); border-radius: var(--radius); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th { padding: 9px 12px; text-align: left; font-size: 11px; font-weight: 600; color: var(--gray-600); background: var(--gray-50); border-bottom: 1px solid var(--gray-200); white-space: nowrap; text-transform: uppercase; letter-spacing: 0.04em; }
+  tbody td { padding: 7px 10px; border-bottom: 1px solid var(--gray-100); vertical-align: middle; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: var(--gray-50); }
+  .month-header td { background: #1E3A5F; color: white; font-weight: 600; font-size: 12px; padding: 7px 12px; }
+  tbody td input, tbody td select { border: none; background: transparent; font-family: inherit; font-size: 13px; color: var(--gray-800); width: 100%; outline: none; }
+  tbody td input:focus, tbody td select:focus { background: var(--blue-light); border-radius: 4px; }
+  .pill { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 500; }
+  .pill-income { background: var(--green-light); color: var(--green); }
+  .pill-expense { background: var(--red-light); color: var(--red); }
+  .pill-flag { background: var(--amber-light); color: var(--amber); margin-left: 4px; }
+  .amt-income { color: var(--green); font-weight: 500; }
+  .amt-expense { color: var(--red); font-weight: 500; }
+  .row-flagged { background: #FFFBEB !important; }
+
+  /* Month balance inputs */
+  .balance-row td { background: var(--amber-light) !important; font-weight: 500; }
+  .balance-row input { font-weight: 600; color: var(--amber) !important; }
+
+  /* Xero section */
+  .xero-help { background: var(--blue-light); border: 1px solid #BFDBFE; border-radius: var(--radius); padding: 14px 16px; margin-bottom: 14px; font-size: 13px; color: var(--blue); }
+  .xero-help strong { display: block; margin-bottom: 4px; font-size: 14px; }
+  .journal-month { margin-bottom: 20px; }
+  .journal-month h4 { font-size: 14px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+  .bal-badge { font-size: 12px; padding: 2px 10px; border-radius: 20px; }
+  .bal-ok { background: var(--green-light); color: var(--green); }
+  .bal-bad { background: var(--red-light); color: var(--red); }
+
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* Progress bar */
+  .progress-bar { background: var(--gray-200); border-radius: 4px; height: 6px; margin-top: 8px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--blue); border-radius: 4px; transition: width 0.3s; }
+</style>
+</head>
+<body>
+
+<header>
+  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+  <div>
+    <h1>Cash Book Extractor</h1>
+    <span>PDF → Excel → Xero Journal</span>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- API Key -->
+  <div class="api-section" style="display:none">
+    <label>🔑 Anthropic API Key (required)</label>
+    <div class="api-key-row">
+      <input type="password" id="apiKey" placeholder="sk-ant-api03-..." autocomplete="off">
+      <button class="btn btn-outline btn-sm" onclick="toggleKey()">Show</button>
+    </div>
+    <small>Your key is never stored or sent anywhere except directly to api.anthropic.com. Get one at console.anthropic.com</small>
+  </div>
+
+  <!-- Steps -->
+  <div class="steps">
+    <div class="step active" id="step1" onclick="goStep(1)"><span class="step-num">1</span> Upload & label</div>
+    <div class="step" id="step2" onclick="goStep(2)"><span class="step-num">2</span> Review & edit</div>
+    <div class="step" id="step3" onclick="goStep(3)"><span class="step-num">3</span> Export</div>
+  </div>
+
+  <!-- PANEL 1: Upload -->
+  <div class="panel active" id="panel1">
+    <div class="card">
+      <div class="card-title">Upload cash book PDFs</div>
+      <div class="upload-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+        <p>Click to select PDFs or drag and drop</p>
+        <small>One PDF per month — the month name will be auto-detected from the filename</small>
+      </div>
+      <input type="file" id="fileInput" accept=".pdf,application/pdf" multiple>
+      <div class="file-list" id="fileList"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Settings</div>
+      <div class="opts">
+        <div class="opt-group">
+          <label>Currency</label>
+          <select id="currency">
+            <option value="GBP">GBP £</option>
+            <option value="USD">USD $</option>
+            <option value="EUR">EUR €</option>
+          </select>
+        </div>
+        <div class="opt-group">
+          <label>VAT / Tax</label>
+          <select id="vatMode">
+            <option value="exempt">No VAT / exempt</option>
+            <option value="inclusive">Tax-inclusive</option>
+            <option value="exclusive">Tax-exclusive</option>
+          </select>
+        </div>
+        <div class="opt-group">
+          <label>Business name (for Excel header)</label>
+          <input type="text" id="bizName" placeholder="e.g. Smith Building Ltd">
+        </div>
+      </div>
+    </div>
+
+    <div class="action-bar">
+      <button class="btn btn-primary" id="extractBtn" onclick="extractAll()" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        Extract transactions
+      </button>
+      <span id="readyMsg" style="font-size:12px;color:var(--gray-400)"></span>
+    </div>
+    <div id="sb1"></div>
+    <div class="progress-bar" id="progressBar" style="display:none"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+  </div>
+
+  <!-- PANEL 2: Review -->
+  <div class="panel" id="panel2">
+    <div class="summary-grid" id="summaryCards"></div>
+    <div class="card" style="padding:0">
+      <div class="table-wrap" id="tableWrap"></div>
+    </div>
+    <button onclick="addRow()" style="font-size:12px;color:var(--blue);background:none;border:none;cursor:pointer;padding:8px 4px;display:inline-flex;align-items:center;gap:4px">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Add row
+    </button>
+    <div class="action-bar">
+      <button class="btn btn-outline" onclick="goStep(1)">← Back</button>
+      <button class="btn btn-success" onclick="downloadExcel()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download Excel
+      </button>
+      <button class="btn btn-primary" onclick="goStep(3)">Build Xero journals →</button>
+    </div>
+    <div id="sb2"></div>
+  </div>
+
+  <!-- PANEL 3: Export -->
+  <div class="panel" id="panel3">
+    <div class="xero-help">
+      <strong>Xero Manual Journal Import</strong>
+      One CSV per month. Import via: Accounting → Manual Journals → Import
+    </div>
+
+    <div class="card">
+      <div class="card-title">Account codes</div>
+      <div class="opts">
+        <div class="opt-group"><label>Bank / Cash account code</label><input type="text" id="bankCode" value="090" placeholder="e.g. 090"></div>
+        <div class="opt-group"><label>Income account code</label><input type="text" id="incomeCode" value="200" placeholder="e.g. 200"></div>
+        <div class="opt-group"><label>Expense account code</label><input type="text" id="expenseCode" value="400" placeholder="e.g. 400"></div>
+        <div class="opt-group"><label>Journal reference prefix</label><input type="text" id="jref" value="Cash book" placeholder="Cash book"></div>
+      </div>
+      <div class="opts" style="margin-top:8px">
+        <div class="opt-group">
+          <label>Export month</label>
+          <select id="exportMth"><option value="all">All months (one file each)</option></select>
+        </div>
+      </div>
+    </div>
+
+    <div id="journalPreview"></div>
+
+    <div class="action-bar">
+      <button class="btn btn-outline" onclick="goStep(2)">← Back</button>
+      <button class="btn btn-primary" onclick="buildJournals()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
+        Preview journals
+      </button>
+      <button class="btn btn-success" id="dlJBtn" onclick="downloadJournals()" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download Xero CSV(s)
+      </button>
+    </div>
+    <div id="sb3"></div>
+  </div>
+
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+let files = [], txs = [], balances = {}, journals = {};
+
+// ── File handling ─────────────────────────────────────────────────────────────
+const fileInput = document.getElementById('fileInput');
+const dropZone  = document.getElementById('dropZone');
+fileInput.addEventListener('change', e => addFiles(Array.from(e.target.files)));
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag'));
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag'); addFiles(Array.from(e.dataTransfer.files)); });
+
+function addFiles(fs) {
+  fs.forEach(f => { if (!files.find(u => u.name === f.name)) files.push({ file: f, month: guessMth(f.name) }); });
+  renderFileList();
+  checkReady();
+}
+
+function guessMth(name) {
+  const n = name.toLowerCase();
+  return MONTHS.find(m => n.includes(m.toLowerCase())) || '';
+}
+
+function renderFileList() {
+  const list = document.getElementById('fileList');
+  list.innerHTML = '';
+  files.forEach((u, i) => {
+    const row = document.createElement('div');
+    row.className = 'file-row';
+    row.innerHTML = `
+      <div class="pdf-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+      <div class="name">${esc(u.file.name)}</div>
+      <select class="${u.month ? '' : 'unset'}" onchange="setMth(${i}, this.value)">
+        <option value="">— select month —</option>
+        ${MONTHS.map(m => `<option value="${m}"${u.month === m ? ' selected' : ''}>${m}</option>`).join('')}
+      </select>
+      ${u.month ? `<span class="badge-ok">✓ ${u.month}</span>` : '<span class="badge-warn">Needs label</span>'}
+      <button class="rm" onclick="rmFile(${i})" title="Remove">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>`;
+    list.appendChild(row);
+  });
+}
+
+function setMth(i, v) { files[i].month = v; renderFileList(); checkReady(); }
+function rmFile(i)    { files.splice(i, 1); renderFileList(); checkReady(); }
+
+function checkReady() {
+  const ok = files.length > 0 && files.every(u => u.month);
+  document.getElementById('extractBtn').disabled = !ok;
+  const ul = files.filter(u => !u.month).length;
+  document.getElementById('readyMsg').textContent =
+    files.length === 0 ? 'Upload at least one PDF to begin' :
+    ul > 0 ? `Label ${ul} more file${ul > 1 ? 's' : ''} before extracting` :
+    
+    `${files.length} file${files.length > 1 ? 's' : ''} ready — click Extract`;
+}
+
+
+function toggleKey() {
+  const inp = document.getElementById('apiKey');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+
+// ── PDF → images ──────────────────────────────────────────────────────────────
+async function pdfToImages(file) {
+  const ab  = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
+  const imgs = [];
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
+    const vp   = page.getViewport({ scale: 2.0 });
+    const canvas = document.createElement('canvas');
+    canvas.width  = vp.width;
+    canvas.height = vp.height;
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+    imgs.push(canvas.toDataURL('image/jpeg', 0.92).split(',')[1]);
+  }
+  return imgs;
+}
+
+// ── Extraction prompt ─────────────────────────────────────────────────────────
+function buildPrompt(month, cur, vat) {
+  const mIdx = MONTHS.indexOf(month);
+  const yr   = mIdx >= 3 ? 2025 : 2026;
+  const mm   = String(mIdx + 1).padStart(2, '0');
+  return `You are an expert bookkeeper reading a handwritten cash book for ${month} ${yr}.
+
+CRITICAL layout rules for this specific cash book:
+- The far-left margin contains ENTRY NUMBERS (e.g. 11, 12, 13...) — these are reference numbers, NOT amounts. Never use them as amounts.
+- After the entry number is the DESCRIPTION (payee name).
+- There are multiple amount columns: a main general column and category columns on the right (e.g. Wages/Pension, Vehicle). The right-hand columns are sometimes partially cut off by scanning.
+- An entry may have its amount ONLY in a right-hand category column with the main column blank — still include it.
+- Common examples: DVLA, Van Finance DD, Shell Diesel often appear in the Vehicle column only; wages appear in Wages/Pension column only.
+- Include ALL rows even if the amount is partially cut off — use your best read and note uncertainty.
+- Also extract the opening balance (labelled "Start" or "Opening") and closing balance if visible.
+
+Return ONLY a valid JSON object with two keys:
+1. "transactions": array of transaction objects
+2. "balances": object with "opening" (number or null) and "closing" (number or null)
+
+Each transaction object must have exactly:
+- date: "01/${mm}/${yr}"
+- description: payee name only (NOT the entry number)
+- reference: entry number as string e.g. "11" or "" if none
+- type: "income" or "expense"
+- category: column it appears in — "Vehicle", "Wages/Pension", "Materials", "Bank Charges", "Sales", "Office", "Plant Hire" etc.
+- amount: positive number (NOT the entry number)
+- notes: "" normally, or describe any uncertainty e.g. "amount partially cut off, reads approx £223"
+
+Include every row from Money In AND Money Out pages.
+Exclude subtotals, column totals, and reconciliation calculations.
+Currency: ${cur}. VAT: ${vat}.
+
+No markdown, no explanation — just the raw JSON object.`;
+}
+
+// ── Extract all ───────────────────────────────────────────────────────────────
+async function extractAll() {
+  const apiKey = '__PROXY__';
+  
+
+  document.getElementById('extractBtn').disabled = true;
+  txs = []; balances = {};
+  document.getElementById('progressBar').style.display = 'block';
+
+  const cur = document.getElementById('currency').value;
+  const vat = document.getElementById('vatMode').value;
+
+  for (let i = 0; i < files.length; i++) {
+    const u = files[i];
+    const pct = Math.round((i / files.length) * 100);
+    document.getElementById('progressFill').style.width = pct + '%';
+    showStatus('sb1', 'info', `Converting ${u.month} to images…`, true);
+
+    let images;
+    try { images = await pdfToImages(u.file); }
+    catch (err) { showStatus('sb1', 'err', `Could not read PDF for ${u.month}: ${err.message}`); document.getElementById('extractBtn').disabled = false; return; }
+
+    showStatus('sb1', 'info', `Extracting ${u.month} (${i + 1} of ${files.length})…`, true);
+
+    const content = images.map(b64 => ({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } }));
+    content.push({ type: 'text', text: buildPrompt(u.month, cur, vat) });
+
+    try {
+      const resp = await fetch('/.netlify/functions/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'claude-opus-4-5', max_tokens: 4000, messages: [{ role: 'user', content }] })
+      });
+      const data = await resp.json();
+      if (data.error) throw new Error(data.error.message);
+      const raw   = data.content.map(b => b.text || '').join('');
+      const clean = raw.replace(/```json|```/g, '').trim();
+      const parsed = JSON.parse(clean);
+
+      const rows = parsed.transactions || parsed; // handle both formats
+      rows.forEach(r => { r.month = u.month; txs.push(r); });
+
+      if (parsed.balances) {
+        balances[u.month] = { opening: parsed.balances.opening, closing: parsed.balances.closing };
+      }
+    } catch (err) {
+      showStatus('sb1', 'err', `Extraction failed for ${u.month}: ${err.message}`);
+      document.getElementById('extractBtn').disabled = false;
+      document.getElementById('progressBar').style.display = 'none';
+      return;
+    }
+  }
+
+  document.getElementById('progressFill').style.width = '100%';
+  setTimeout(() => document.getElementById('progressBar').style.display = 'none', 600);
+
+  const mths    = [...new Set(txs.map(t => t.month))];
+  const flagged = txs.filter(t => t.notes && t.notes.length > 2).length;
+  showStatus('sb1', 'ok', `✓ Extracted ${txs.length} transactions across ${mths.length} month${mths.length > 1 ? 's' : ''}${flagged ? ` · ${flagged} flagged for review` : ''}`);
+  document.getElementById('extractBtn').disabled = false;
+  renderReview();
+  goStep(2);
+}
+
+// ── Review table ──────────────────────────────────────────────────────────────
+function renderReview() {
+  const sym = getCur();
+  const inc = txs.filter(t => t.type === 'income').reduce((s, t) => s + num(t.amount), 0);
+  const exp = txs.filter(t => t.type === 'expense').reduce((s, t) => s + num(t.amount), 0);
+  const flagged = txs.filter(t => t.notes && t.notes.length > 2).length;
+
+  document.getElementById('summaryCards').innerHTML = `
+    <div class="sum-card"><div class="lbl">Total income</div><div class="val val-green">${sym}${fmt(inc)}</div></div>
+    <div class="sum-card"><div class="lbl">Total expenses</div><div class="val val-red">${sym}${fmt(exp)}</div></div>
+    <div class="sum-card"><div class="lbl">Net</div><div class="val ${inc - exp >= 0 ? 'val-green' : 'val-red'}">${sym}${fmt(Math.abs(inc - exp))}</div></div>
+    <div class="sum-card"><div class="lbl">Flagged</div><div class="val ${flagged ? 'val-red' : 'val-green'}">${flagged ? flagged + ' to check' : 'All clear'}</div></div>`;
+
+  const grp = {};
+  txs.forEach((t, i) => { if (!grp[t.month]) grp[t.month] = []; grp[t.month].push({ ...t, _i: i }); });
+
+  let html = `<table>
+    <thead><tr>
+      <th style="width:50px">Month</th>
+      <th style="width:40px">Ref</th>
+      <th style="width:180px">Description</th>
+      <th style="width:70px">Type</th>
+      <th style="width:110px">Category</th>
+      <th style="width:90px">Amount</th>
+      <th>Notes</th>
+      <th style="width:32px"></th>
+    </tr></thead><tbody>`;
+
+  MONTHS.filter(m => grp[m]).forEach(m => {
+    const mI = grp[m].filter(t => t.type === 'income').reduce((s, t) => s + num(t.amount), 0);
+    const mE = grp[m].filter(t => t.type === 'expense').reduce((s, t) => s + num(t.amount), 0);
+    const bal = balances[m] || {};
+
+    // Month header
+    html += `<tr class="month-header"><td colspan="8">${m} &nbsp;·&nbsp; ${grp[m].length} entries &nbsp;·&nbsp; In: ${sym}${fmt(mI)} &nbsp;·&nbsp; Out: ${sym}${fmt(mE)}</td></tr>`;
+
+    // Opening balance row
+    const ob = bal.opening != null ? bal.opening.toFixed(2) : '';
+    html += `<tr class="balance-row">
+      <td colspan="5" style="text-align:right;font-size:12px;padding-right:12px">Opening bank balance</td>
+      <td><input type="text" value="${ob}" placeholder="enter" onchange="setBalance('${m}','opening',this.value)" style="font-weight:600;color:var(--amber)"></td>
+      <td colspan="2"></td>
+    </tr>`;
+
+    // Transaction rows
+    grp[m].forEach(t => {
+      const i  = t._i;
+      const fl = t.notes && t.notes.length > 2;
+      html += `<tr class="${fl ? 'row-flagged' : ''}">
+        <td><span class="pill ${t.type === 'income' ? 'pill-income' : 'pill-expense'}" style="font-size:10px">${m.substring(0,3)}</span></td>
+        <td><input value="${esc(t.reference || '')}" onchange="upd(${i},'reference',this.value)" style="max-width:35px"></td>
+        <td><input value="${esc(t.description || '')}" onchange="upd(${i},'description',this.value)">${fl ? '<span class="pill pill-flag">check</span>' : ''}</td>
+        <td>
+          <select onchange="upd(${i},'type',this.value)" style="font-size:12px">
+            <option ${t.type === 'income' ? 'selected' : ''}>income</option>
+            <option ${t.type === 'expense' ? 'selected' : ''}>expense</option>
+          </select>
+        </td>
+        <td><input value="${esc(t.category || '')}" onchange="upd(${i},'category',this.value)"></td>
+        <td class="${t.type === 'income' ? 'amt-income' : 'amt-expense'}">
+          <input value="${num(t.amount).toFixed(2)}" onchange="upd(${i},'amount',this.value)" style="text-align:right">
+        </td>
+        <td><input value="${esc(t.notes || '')}" onchange="upd(${i},'notes',this.value)" style="font-size:12px;color:var(--gray-400)"></td>
+        <td><button class="rm" onclick="rmRow(${i})"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></td>
+      </tr>`;
+    });
+
+    // Closing balance row
+    const cb = bal.closing != null ? bal.closing.toFixed(2) : '';
+    html += `<tr class="balance-row">
+      <td colspan="5" style="text-align:right;font-size:12px;padding-right:12px">Closing bank balance</td>
+      <td><input type="text" value="${cb}" placeholder="enter" onchange="setBalance('${m}','closing',this.value)" style="font-weight:600;color:var(--amber)"></td>
+      <td colspan="2"></td>
+    </tr>`;
+  });
+
+  html += '</tbody></table>';
+  document.getElementById('tableWrap').innerHTML = html;
+
+  // Update export month selector
+  const mths = [...new Set(txs.map(t => t.month))].sort((a, b) => MONTHS.indexOf(a) - MONTHS.indexOf(b));
+  const sel  = document.getElementById('exportMth');
+  sel.innerHTML = '<option value="all">All months (one file each)</option>' + mths.map(m => `<option value="${m}">${m} only</option>`).join('');
+}
+
+function setBalance(month, key, val) {
+  if (!balances[month]) balances[month] = {};
+  balances[month][key] = parseFloat(val) || null;
+}
+function upd(i, f, v)  { txs[i][f] = f === 'amount' ? parseFloat(v) || 0 : v; }
+function rmRow(i)       { txs.splice(i, 1); renderReview(); }
+function addRow() {
+  const mths = [...new Set(txs.map(t => t.month))];
+  txs.push({ date: '', description: '', reference: '', type: 'expense', category: '', amount: 0, notes: '', month: mths[mths.length - 1] || '' });
+  renderReview();
+}
+
+// ── Excel export ──────────────────────────────────────────────────────────────
+function downloadExcel() {
+  const wb   = XLSX.utils.book_new();
+  const sym  = getCur();
+  const biz  = document.getElementById('bizName').value || 'Cash Book';
+  const mths = [...new Set(txs.map(t => t.month))].sort((a, b) => MONTHS.indexOf(a) - MONTHS.indexOf(b));
+
+  // Summary sheet
+  const summaryData = [
+    [biz + ' — Cash Book Summary'], [''],
+    ['Month', 'Opening Balance', 'Total Income', 'Total Expenses', 'Closing Balance', 'Net'],
+  ];
+  mths.forEach(m => {
+    const mT  = txs.filter(t => t.month === m);
+    const inc = mT.filter(t => t.type === 'income').reduce((s, t) => s + num(t.amount), 0);
+    const exp = mT.filter(t => t.type === 'expense').reduce((s, t) => s + num(t.amount), 0);
+    const bal = balances[m] || {};
+    summaryData.push([m, bal.opening || '', inc, exp, bal.closing || '', inc - exp]);
+  });
+  const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
+  wsSummary['!cols'] = [{ wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 16 }, { wch: 12 }];
+  XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
+
+  // One sheet per month
+  mths.forEach(m => {
+    const mT  = txs.filter(t => t.month === m);
+    const bal = balances[m] || {};
+    const inc = mT.filter(t => t.type === 'income').reduce((s, t) => s + num(t.amount), 0);
+    const exp = mT.filter(t => t.type === 'expense').reduce((s, t) => s + num(t.amount), 0);
+
+    const data = [
+      [biz + ' — ' + m], [''],
+      ['Opening bank balance', '', '', bal.opening != null ? bal.opening : '(enter)'], [''],
+      ['MONEY IN (Income)'],
+      ['Ref', 'Description', 'Category', `Amount (${sym})`],
+    ];
+    mT.filter(t => t.type === 'income').forEach(t =>
+      data.push([t.reference, t.description, t.category, num(t.amount)]));
+    data.push(['', '', 'Total Income', inc]);
+    data.push(['']);
+    data.push(['MONEY OUT (Expenses)']);
+    data.push(['Ref', 'Description', 'Category', `Amount (${sym})`]);
+    mT.filter(t => t.type === 'expense').forEach(t =>
+      data.push([t.reference, t.description, t.category, num(t.amount)]));
+    data.push(['', '', 'Total Expenses', exp]);
+    data.push(['']);
+    data.push(['Closing bank balance', '', '', bal.closing != null ? bal.closing : '(enter)']);
+    data.push(['']);
+    data.push(['— Reconciliation —']);
+    data.push(['Opening balance', '', '', bal.opening || 0]);
+    data.push(['+ Income', '', '', inc]);
+    data.push(['− Expenses', '', '', -exp]);
+    data.push(['= Calculated closing', '', '', (bal.opening || 0) + inc - exp]);
+    if (bal.closing != null) {
+      data.push(['Book closing balance', '', '', bal.closing]);
+      data.push(['Difference', '', '', bal.closing - ((bal.opening || 0) + inc - exp)]);
+    }
+
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    ws['!cols'] = [{ wch: 8 }, { wch: 28 }, { wch: 20 }, { wch: 14 }];
+    XLSX.utils.book_append_sheet(wb, ws, m.substring(0, 31));
+  });
+
+  XLSX.writeFile(wb, 'cash_book.xlsx');
+  showStatus('sb2', 'ok', '✓ Excel downloaded — check your downloads folder');
+}
+
+// ── Xero journals ─────────────────────────────────────────────────────────────
+function buildJournals() {
+  if (!txs.length) { showStatus('sb3', 'err', 'No transactions to build journal from'); return; }
+  const bank = document.getElementById('bankCode').value  || '090';
+  const inc  = document.getElementById('incomeCode').value || '200';
+  const exp  = document.getElementById('expenseCode').value || '400';
+  const pre  = document.getElementById('jref').value      || 'Cash book';
+  journals   = {};
+
+  txs.forEach(t => {
+    const m   = t.month;
+    if (!journals[m]) journals[m] = [];
+    const amt = num(t.amount).toFixed(2);
+    const nar = `${pre} — ${m} — ${t.description}${t.reference ? ' (' + t.reference + ')' : ''}`;
+    if (t.type === 'income') {
+      journals[m].push({ date: t.date, nar, code: bank, desc: t.description + ' (Cash/Bank)', dr: amt, cr: '',   tax: 'Tax Exempt (0%)' });
+      journals[m].push({ date: t.date, nar, code: inc,  desc: t.category || 'Income',         dr: '',  cr: amt,  tax: 'Tax Exempt (0%)' });
+    } else {
+      journals[m].push({ date: t.date, nar, code: exp,  desc: t.category || 'Expense',        dr: amt, cr: '',   tax: 'Tax Exempt (0%)' });
+      journals[m].push({ date: t.date, nar, code: bank, desc: t.description + ' (Cash/Bank)', dr: '',  cr: amt,  tax: 'Tax Exempt (0%)' });
+    }
+  });
+
+  const mths = Object.keys(journals).sort((a, b) => MONTHS.indexOf(a) - MONTHS.indexOf(b));
+  let html   = '';
+  mths.forEach(m => {
+    const rows = journals[m];
+    const dr   = rows.reduce((s, r) => s + (parseFloat(r.dr) || 0), 0);
+    const cr   = rows.reduce((s, r) => s + (parseFloat(r.cr) || 0), 0);
+    const ok   = Math.abs(dr - cr) < 0.01;
+    html += `<div class="journal-month card">
+      <h4>${m} <span class="bal-badge ${ok ? 'bal-ok' : 'bal-bad'}">${ok ? '✓ Balanced' : '✗ Unbalanced'} · Dr £${fmt(dr)} / Cr £${fmt(cr)}</span></h4>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Date</th><th>Narration</th><th>Code</th><th>Description</th><th style="text-align:right">Debit</th><th style="text-align:right">Credit</th></tr></thead>
+        <tbody>${rows.map(r => `<tr>
+          <td>${r.date}</td>
+          <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(r.nar)}">${esc(r.nar.substring(0, 45))}${r.nar.length > 45 ? '…' : ''}</td>
+          <td>${r.code}</td><td>${esc(r.desc)}</td>
+          <td style="text-align:right">${r.dr}</td><td style="text-align:right">${r.cr}</td>
+        </tr>`).join('')}</tbody>
+        <tfoot><tr style="background:var(--gray-100);font-weight:600">
+          <td colspan="4" style="text-align:right;font-size:12px;color:var(--gray-600)">Totals</td>
+          <td style="text-align:right">${fmt(dr)}</td><td style="text-align:right">${fmt(cr)}</td>
+        </tr></tfoot>
+      </table></div>
+    </div>`;
+  });
+
+  document.getElementById('journalPreview').innerHTML = html;
+  const allOk = mths.every(m => {
+    const r = journals[m];
+    return Math.abs(r.reduce((s, x) => s + (parseFloat(x.dr) || 0), 0) - r.reduce((s, x) => s + (parseFloat(x.cr) || 0), 0)) < 0.01;
+  });
+  document.getElementById('dlJBtn').disabled = !allOk;
+  if (!allOk) showStatus('sb3', 'warn', 'Some journals are unbalanced — check for missing or incorrect amounts');
+}
+
+function downloadJournals() {
+  const which = document.getElementById('exportMth').value;
+  const mths  = which === 'all'
+    ? Object.keys(journals).sort((a, b) => MONTHS.indexOf(a) - MONTHS.indexOf(b))
+    : [which];
+  mths.forEach(m => {
+    let csv = '*Narration,*Date,*AccountCode,*Description,*TaxRate,*Debit,*Credit\n';
+    journals[m].forEach(r => csv += `"${r.nar}",${r.date},${r.code},"${r.desc}",${r.tax},${r.dr},${r.cr}\n`);
+    dlFile(`xero_journal_${m.toLowerCase()}.csv`, csv, 'text/csv');
+  });
+  showStatus('sb3', 'ok', `✓ Downloaded ${mths.length} journal file${mths.length > 1 ? 's' : ''} — import each via Accounting → Manual Journals → Import`);
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function getCur()    { const v = document.getElementById('currency').value; return v === 'GBP' ? '£' : v === 'USD' ? '$' : '€'; }
+function num(v)      { return parseFloat(v) || 0; }
+function fmt(v)      { return num(v).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function esc(s)      { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+function dlFile(name, content, type) {
+  const a = document.createElement('a');
+  a.href = 'data:' + type + ';charset=utf-8,' + encodeURIComponent(content);
+  a.download = name;
+  a.click();
+}
+function showStatus(id, type, msg, spin) {
+  const el = document.getElementById(id);
+  el.innerHTML = `<div class="status ${type}">${spin ? '<div class="spinner"></div>' : ''} ${msg}</div>`;
+}
+function goStep(n) {
+  [1,2,3].forEach(i => {
+    document.getElementById(`panel${i}`).className = 'panel' + (i === n ? ' active' : '');
+    const s = document.getElementById(`step${i}`);
+    s.className = 'step' + (i === n ? ' active' : i < n ? ' done' : '');
+  });
+}
+</script>
+</body>
+</html>
