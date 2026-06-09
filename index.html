@@ -617,9 +617,8 @@ function esc(s){return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').re
 function dlFile(name,content,type){const a=document.createElement('a');a.href='data:'+type+';charset=utf-8,'+encodeURIComponent(content);a.download=name;a.click();}
 function showStatus(id,type,msg,spin){const el=document.getElementById(id);el.innerHTML=`<div class="status ${type}">${spin?'<div class="spinner"></div>':''} ${msg}</div>`;}
 function goStep(n){[1,2].forEach(i=>{document.getElementById(`panel${i}`).className='panel'+(i===n?' active':'');const s=document.getElementById(`step${i}`);s.className='step'+(i===n?' active':i<n?' done':'');});}
-</script>
-</body>
-</html>// ── Excel download (plain SheetJS, reliable formulas) ──────────────────────
+
+// ── Excel download (plain SheetJS, reliable formulas) ──────────────────────
 
 // ── Excel upload & journal ────────────────────────────────────────────────────
 const xlFileInput=document.getElementById('xlFileInput');
