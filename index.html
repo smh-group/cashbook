@@ -607,10 +607,12 @@ async function readExcelAndBuildJournal(file){
 
 function downloadJournal(){
   let csv=',Description,Debit,Credit\n';
-  journalRows.forEach(r=>csv+=`,"${r.desc}",${r.debit},${r.credit}\n`);
+  // Strip commas from amounts so CSV doesn't break
+  const stripComma=v=>String(v).replace(/,/g,'');
+  journalRows.forEach(r=>csv+=`,"${r.desc}",${stripComma(r.debit)},${stripComma(r.credit)}\n`);
   const dr=journalRows.reduce((s,r)=>s+num(r.debit),0);
   const cr=journalRows.reduce((s,r)=>s+num(r.credit),0);
-  csv+=`,,${fmt(dr)},${fmt(cr)}\n`;
+  csv+=`,,${stripComma(fmt(dr))},${stripComma(fmt(cr))}\n`;
   dlFile('journal.csv',csv,'text/csv');
   showStatus('sb3','ok','✓ Journal downloaded — ready for IRIS TB Mapper');
 }
@@ -723,10 +725,12 @@ async function readExcelAndBuildJournal(file){
 
 function downloadJournal(){
   let csv=',Description,Debit,Credit\n';
-  journalRows.forEach(r=>csv+=`,"${r.desc}",${r.debit},${r.credit}\n`);
+  // Strip commas from amounts so CSV doesn't break
+  const stripComma=v=>String(v).replace(/,/g,'');
+  journalRows.forEach(r=>csv+=`,"${r.desc}",${stripComma(r.debit)},${stripComma(r.credit)}\n`);
   const dr=journalRows.reduce((s,r)=>s+num(r.debit),0);
   const cr=journalRows.reduce((s,r)=>s+num(r.credit),0);
-  csv+=`,,${fmt(dr)},${fmt(cr)}\n`;
+  csv+=`,,${stripComma(fmt(dr))},${stripComma(fmt(cr))}\n`;
   dlFile('journal.csv',csv,'text/csv');
   showStatus('sb3','ok','✓ Journal downloaded — ready for IRIS TB Mapper');
 }
