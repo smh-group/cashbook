@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cash Book Extractor</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -71,8 +71,6 @@ header span{font-size:12px;opacity:0.7}
 @keyframes spin{to{transform:rotate(360deg)}}
 .progress-bar{background:var(--gray-200);border-radius:4px;height:6px;margin-top:8px;overflow:hidden}
 .progress-fill{height:100%;background:var(--blue);border-radius:4px;transition:width 0.3s}
-
-/* Journal preview table */
 .table-wrap{overflow-x:auto;border:1px solid var(--gray-200);border-radius:var(--radius);margin-top:16px}
 table{width:100%;border-collapse:collapse;font-size:13px}
 thead th{padding:9px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--gray-600);background:var(--gray-50);border-bottom:1px solid var(--gray-200);white-space:nowrap;text-transform:uppercase;letter-spacing:0.04em}
@@ -82,16 +80,12 @@ tbody tr:hover{background:var(--gray-50)}
 .total-row td{background:var(--gray-50);font-weight:700;border-top:2px solid var(--gray-200)}
 .debit-val{color:var(--red);font-weight:500}
 .credit-val{color:var(--green);font-weight:500}
-
 .panel{display:none}.panel.active{display:block}
-
-/* Upload Excel zone */
 .upload-zone-excel{border:2px dashed #A7F3D0;border-radius:var(--radius);padding:32px;text-align:center;cursor:pointer;transition:all 0.15s;background:#F0FDF4}
 .upload-zone-excel:hover,.upload-zone-excel.drag{border-color:var(--green);background:var(--green-light)}
 .upload-zone-excel svg{width:40px;height:40px;color:var(--green);margin-bottom:10px}
 .upload-zone-excel p{font-size:14px;color:var(--green);margin-bottom:4px;font-weight:500}
 .upload-zone-excel small{font-size:12px;color:var(--gray-400)}
-
 .info-box{background:var(--blue-light);border:1px solid #BFDBFE;border-radius:var(--radius);padding:14px 16px;font-size:13px;color:var(--blue);margin-bottom:16px}
 .info-box strong{display:block;font-size:14px;margin-bottom:4px}
 </style>
@@ -101,14 +95,13 @@ tbody tr:hover{background:var(--gray-50)}
   <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
   <div><h1>Cash Book Extractor</h1><span>PDF → Excel → Journal</span></div>
 </header>
-
 <div class="container">
   <div class="steps">
     <div class="step active" id="step1" onclick="goStep(1)"><span class="step-num">1</span>Upload & Extract</div>
     <div class="step" id="step2" onclick="goStep(2)"><span class="step-num">2</span>Generate Journal</div>
   </div>
 
-  <!-- PANEL 1: Upload & Extract -->
+  <!-- PANEL 1 -->
   <div class="panel active" id="panel1">
     <div class="card">
       <div class="card-title">Upload cash book PDFs</div>
@@ -120,7 +113,6 @@ tbody tr:hover{background:var(--gray-50)}
       <input type="file" id="fileInput" accept=".pdf,application/pdf" multiple style="display:none">
       <div class="file-list" id="fileList"></div>
     </div>
-
     <div class="card">
       <div class="card-title">Settings</div>
       <div class="opts">
@@ -128,11 +120,11 @@ tbody tr:hover{background:var(--gray-50)}
           <label>Financial year end month</label>
           <select id="yearEndMonth">
             <option value="0">January</option><option value="1">February</option>
-            <option value="2">March</option><option value="3">April</option>
+            <option value="2" selected>March</option><option value="3">April</option>
             <option value="4">May</option><option value="5">June</option>
             <option value="6">July</option><option value="7">August</option>
             <option value="8">September</option><option value="9">October</option>
-            <option value="10">November</option><option value="11" selected>December</option>
+            <option value="10">November</option><option value="11">December</option>
           </select>
         </div>
         <div class="opt-group">
@@ -149,7 +141,6 @@ tbody tr:hover{background:var(--gray-50)}
         </div>
       </div>
     </div>
-
     <div class="action-bar">
       <button class="btn btn-primary" id="extractBtn" onclick="extractAll()" disabled>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -161,43 +152,37 @@ tbody tr:hover{background:var(--gray-50)}
     <div class="progress-bar" id="progressBar" style="display:none"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
   </div>
 
-  <!-- PANEL 2: Generate Journal -->
+  <!-- PANEL 2 -->
   <div class="panel" id="panel2">
     <div class="info-box">
-      <strong>How to use</strong>
-      First download and correct the Excel, then upload it back here to generate the journal.
+      <strong>Two step process</strong>
+      Download and correct the Excel, then upload it back to generate the journal.
     </div>
-
-    <!-- Step 2a: Download Excel -->
     <div class="card" id="downloadCard">
       <div class="card-title">Step 2a — Download & correct Excel</div>
-      <p style="font-size:13px;color:var(--gray-600);margin-bottom:14px">Download the extracted data, make any corrections in Excel, then upload it back below.</p>
-      <button class="btn btn-success" onclick="downloadExcel()" id="dlExcelBtn">
+      <p style="font-size:13px;color:var(--gray-600);margin-bottom:14px">Download, make any corrections, then upload back below.</p>
+      <button class="btn btn-success" onclick="downloadExcel()">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         Download Excel
       </button>
       <div id="sb2"></div>
     </div>
-
-    <!-- Step 2b: Upload corrected Excel -->
     <div class="card">
       <div class="card-title">Step 2b — Upload corrected Excel to generate journal</div>
       <div class="upload-zone-excel" id="xlDropZone" onclick="document.getElementById('xlFileInput').click()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
         <p>Upload corrected cash_book.xlsx</p>
-        <small>The app will read the Summary sheet to build the journal</small>
+        <small>App reads the Summary sheet to build the journal</small>
       </div>
       <input type="file" id="xlFileInput" accept=".xlsx,.xls" style="display:none">
       <div id="xlFileStatus" style="margin-top:10px"></div>
     </div>
-
-    <!-- Journal preview -->
     <div id="journalSection" style="display:none">
       <div class="card">
-        <div class="card-title">Journal preview</div>
+        <div class="card-title">Journal</div>
         <div id="journalPreview"></div>
         <div class="action-bar">
-          <button class="btn btn-success" id="dlJournalBtn" onclick="downloadJournal()">
+          <button class="btn btn-success" onclick="downloadJournal()">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             Download Journal (CSV)
           </button>
@@ -205,494 +190,527 @@ tbody tr:hover{background:var(--gray-50)}
         <div id="sb3"></div>
       </div>
     </div>
-
-    <div class="action-bar">
-      <button class="btn btn-outline" onclick="goStep(1)">← Back</button>
-    </div>
+    <div class="action-bar"><button class="btn btn-outline" onclick="goStep(1)">← Back</button></div>
   </div>
 </div>
 
 <script>
 pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-
 const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
-let files=[], txs=[], balances={}, journalRows=[];
+let files=[],txs=[],balances={},journalRows=[];
+
+// ── Colours (RGB without #) ──────────────────────────────────────────────────
+const C = {
+  DARK_BLUE:'1E3A5F', MID_BLUE:'2563EB', LIGHT_BLUE:'DBEAFE',
+  GREEN_HDR:'16A34A', GREEN_BG:'DCFCE7',
+  RED_HDR:'DC2626',   RED_BG:'FEE2E2',
+  AMBER_BG:'FEF3C7',  GRAY_50:'F9FAFB',  WHITE:'FFFFFF',
+  BLACK:'000000',     BLUE_TEXT:'0000FF', RED_TEXT:'DC2626'
+};
+
+function xlFont(bold,sz,color,italic){return{name:'Arial',bold:!!bold,sz:sz||10,color:{rgb:color||C.BLACK},italic:!!italic};}
+function xlFill(rgb){return{patternType:'solid',fgColor:{rgb}};}
+function xlAlign(h,v,wrap){return{horizontal:h||'left',vertical:v||'center',wrapText:!!wrap};}
+function xlBorder(rgb){const s={style:'thin',color:{rgb:rgb||'E5E7EB'}};return{top:s,bottom:s,left:s,right:s};}
+function xlCell(v,type,style){return{v,t:type||'s',s:style||{}};}
+function xlNum(v,style){return{v:parseFloat(v)||0,t:'n',s:style||{},z:'£#,##0.00'};}
 
 // ── Year ordering ─────────────────────────────────────────────────────────────
-function getYearOrder() {
-  const endMonth = parseInt(document.getElementById('yearEndMonth').value);
-  const endYear  = parseInt(document.getElementById('yearEndYear').value) || 2026;
-  // Month 1 = month after year end
-  const order = [];
-  for (let i = 1; i <= 12; i++) {
-    const mIdx = (endMonth + i) % 12;
-    // Year: if mIdx > endMonth it's the previous year, else endYear
-    const yr = mIdx > endMonth ? endYear - 1 : endYear;
-    order.push({ month: MONTHS[mIdx], mIdx, yr });
+function getYearOrder(){
+  const endMonth=parseInt(document.getElementById('yearEndMonth').value);
+  const endYear=parseInt(document.getElementById('yearEndYear').value)||2026;
+  const order=[];
+  for(let i=1;i<=12;i++){
+    const mIdx=(endMonth+i)%12;
+    const yr=mIdx>endMonth?endYear-1:endYear;
+    order.push({month:MONTHS[mIdx],mIdx,yr});
   }
   return order;
 }
-
-function sortedMonths(monthList) {
-  const order = getYearOrder().map(o => o.month);
-  return [...monthList].sort((a, b) => order.indexOf(a) - order.indexOf(b));
+function sortedMonths(list){
+  const order=getYearOrder().map(o=>o.month);
+  return [...list].sort((a,b)=>order.indexOf(a)-order.indexOf(b));
 }
 
 // ── File handling ─────────────────────────────────────────────────────────────
-const fileInput = document.getElementById('fileInput');
-const dropZone  = document.getElementById('dropZone');
-fileInput.addEventListener('change', e => addFiles(Array.from(e.target.files)));
-dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag'); });
-dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag'));
-dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag'); addFiles(Array.from(e.dataTransfer.files)); });
+const fileInput=document.getElementById('fileInput');
+const dropZone=document.getElementById('dropZone');
+fileInput.addEventListener('change',e=>addFiles(Array.from(e.target.files)));
+dropZone.addEventListener('dragover',e=>{e.preventDefault();dropZone.classList.add('drag');});
+dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('drag'));
+dropZone.addEventListener('drop',e=>{e.preventDefault();dropZone.classList.remove('drag');addFiles(Array.from(e.dataTransfer.files));});
 
-function addFiles(fs) {
-  fs.forEach(f => { if (!files.find(u => u.name === f.name)) files.push({ file: f, month: guessMth(f.name) }); });
-  renderFileList(); checkReady();
-}
-function guessMth(name) {
-  const n = name.toLowerCase();
-  return MONTHS.find(m => n.includes(m.toLowerCase())) || '';
-}
-function renderFileList() {
-  const list = document.getElementById('fileList');
-  list.innerHTML = '';
-  // Sort files by year order
-  const order = getYearOrder().map(o => o.month);
-  const sorted = [...files].sort((a, b) => {
-    const ai = order.indexOf(a.month), bi = order.indexOf(b.month);
-    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
-  });
-  sorted.forEach((u, si) => {
-    const i = files.indexOf(u);
-    const row = document.createElement('div');
-    row.className = 'file-row';
-    row.innerHTML = `
-      <div class="pdf-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+function addFiles(fs){fs.forEach(f=>{if(!files.find(u=>u.name===f.name))files.push({file:f,month:guessMth(f.name)});});renderFileList();checkReady();}
+function guessMth(name){const n=name.toLowerCase();return MONTHS.find(m=>n.includes(m.toLowerCase()))||'';}
+function renderFileList(){
+  const list=document.getElementById('fileList');list.innerHTML='';
+  const order=getYearOrder().map(o=>o.month);
+  [...files].sort((a,b)=>(order.indexOf(a.month)>-1?order.indexOf(a.month):99)-(order.indexOf(b.month)>-1?order.indexOf(b.month):99)).forEach((u,si)=>{
+    const i=files.indexOf(u);
+    const row=document.createElement('div');row.className='file-row';
+    row.innerHTML=`<div class="pdf-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
       <div class="fname">${esc(u.file.name)}</div>
-      <select class="${u.month ? '' : 'unset'}" onchange="setMth(${i},this.value)">
+      <select class="${u.month?'':'unset'}" onchange="setMth(${i},this.value)">
         <option value="">— select month —</option>
-        ${MONTHS.map(m => `<option value="${m}"${u.month===m?' selected':''}>${m}</option>`).join('')}
+        ${MONTHS.map(m=>`<option value="${m}"${u.month===m?' selected':''}>${m}</option>`).join('')}
       </select>
-      ${u.month ? `<span class="badge-ok">✓ ${u.month}</span>` : '<span class="badge-warn">Needs label</span>'}
+      ${u.month?`<span class="badge-ok">✓ ${u.month}</span>`:'<span class="badge-warn">Needs label</span>'}
       <button class="rm" onclick="rmFile(${i})"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>`;
     list.appendChild(row);
   });
 }
-function setMth(i, v) { files[i].month = v; renderFileList(); checkReady(); }
-function rmFile(i)    { files.splice(i, 1); renderFileList(); checkReady(); }
-function checkReady() {
-  const ok = files.length > 0 && files.every(u => u.month);
-  document.getElementById('extractBtn').disabled = !ok;
-  const ul = files.filter(u => !u.month).length;
-  document.getElementById('readyMsg').textContent =
-    files.length === 0 ? 'Upload at least one PDF to begin' :
-    ul > 0 ? `Label ${ul} more file${ul>1?'s':''} before extracting` :
-    `${files.length} file${files.length>1?'s':''} ready — click Extract`;
+function setMth(i,v){files[i].month=v;renderFileList();checkReady();}
+function rmFile(i){files.splice(i,1);renderFileList();checkReady();}
+function checkReady(){
+  const ok=files.length>0&&files.every(u=>u.month);
+  document.getElementById('extractBtn').disabled=!ok;
+  const ul=files.filter(u=>!u.month).length;
+  document.getElementById('readyMsg').textContent=files.length===0?'Upload at least one PDF to begin':ul>0?`Label ${ul} more file${ul>1?'s':''} before extracting`:`${files.length} file${files.length>1?'s':''} ready — click Extract`;
 }
 
 // ── PDF → images ──────────────────────────────────────────────────────────────
-async function pdfToImages(file) {
-  const ab = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({data:ab}).promise;
-  const imgs = [];
-  for (let p = 1; p <= pdf.numPages; p++) {
-    const page = await pdf.getPage(p);
-    const vp = page.getViewport({scale:2.0});
-    const canvas = document.createElement('canvas');
-    canvas.width = vp.width; canvas.height = vp.height;
+async function pdfToImages(file){
+  const ab=await file.arrayBuffer();
+  const pdf=await pdfjsLib.getDocument({data:ab}).promise;
+  const imgs=[];
+  for(let p=1;p<=pdf.numPages;p++){
+    const page=await pdf.getPage(p);
+    const vp=page.getViewport({scale:2.0});
+    const canvas=document.createElement('canvas');
+    canvas.width=vp.width;canvas.height=vp.height;
     await page.render({canvasContext:canvas.getContext('2d'),viewport:vp}).promise;
     imgs.push(canvas.toDataURL('image/jpeg',0.92).split(',')[1]);
   }
   return imgs;
 }
 
-// ── Extraction prompt ─────────────────────────────────────────────────────────
-function buildPrompt(month, yr, mm, cur, vat) {
+function buildPrompt(month,yr,mm,cur){
   return `You are an expert bookkeeper reading a handwritten cash book for ${month} ${yr}.
-
 CRITICAL layout rules:
-- Far-left margin has ENTRY NUMBERS (e.g. 11, 12, 13...) — these are reference numbers NOT amounts
-- After the entry number is the DESCRIPTION (payee name)
-- Multiple amount columns: main general column plus category columns on the right (Wages/Pension, Vehicle etc.) — right columns sometimes cut off by scanning
+- Far-left margin has ENTRY NUMBERS (e.g. 11, 12, 13...) — reference numbers NOT amounts
+- Multiple amount columns: main column plus category columns on the right (Wages/Pension, Vehicle etc.) — sometimes cut off
 - An entry may have its amount ONLY in a right-hand category column — still include it
-- DVLA, Van Finance DD, Shell Diesel often appear in Vehicle column only; wages in Wages/Pension column
+- DVLA, Van Finance DD, Shell Diesel often in Vehicle column only; wages in Wages/Pension column
 - Include ALL rows even if amount partially cut off — flag uncertainty in notes
 - Extract opening balance (labelled "Start" or "Opening") and closing balance if visible
 
-Return ONLY a valid JSON object, no markdown:
-{
-  "transactions": [
-    {
-      "date": "01/${mm}/${yr}",
-      "description": "payee name only (not entry number)",
-      "reference": "entry number as string or empty string",
-      "type": "income or expense",
-      "category": "Vehicle|Wages/Pension|Materials|Bank Charges|Sales|Office|Plant Hire|General",
-      "amount": 123.45,
-      "notes": "flag cut-off amounts here or leave empty"
-    }
-  ],
-  "balances": {
-    "opening": 12345.67,
-    "closing": 23456.78
-  }
+Return ONLY valid JSON, no markdown:
+{"transactions":[{"date":"01/${mm}/${yr}","description":"payee name","reference":"entry number or empty","type":"income or expense","category":"Vehicle|Wages/Pension|Materials|Bank Charges|Sales|Office|Plant Hire|General","amount":123.45,"notes":"flag issues or empty"}],"balances":{"opening":12345.67,"closing":23456.78}}
+
+Include every row from Money In AND Money Out. Exclude subtotals and reconciliation figures. Currency: ${cur}.`;
 }
 
-Include every row from Money In AND Money Out. Exclude subtotals and reconciliation figures.
-Currency: ${cur}. VAT: ${vat}.`;
-}
+async function extractAll(){
+  document.getElementById('extractBtn').disabled=true;
+  txs=[];balances={};
+  document.getElementById('progressBar').style.display='block';
+  const cur=document.getElementById('currency').value;
+  const yearOrder=getYearOrder();
+  const order=yearOrder.map(o=>o.month);
+  const sortedFiles=[...files].sort((a,b)=>(order.indexOf(a.month)>-1?order.indexOf(a.month):99)-(order.indexOf(b.month)>-1?order.indexOf(b.month):99));
 
-// ── Extract all ───────────────────────────────────────────────────────────────
-async function extractAll() {
-  document.getElementById('extractBtn').disabled = true;
-  txs = []; balances = {};
-  document.getElementById('progressBar').style.display = 'block';
-  const cur = document.getElementById('currency').value;
-  const vat = 'exempt';
-  const yearOrder = getYearOrder();
-
-  // Sort files by year order
-  const order = yearOrder.map(o => o.month);
-  const sortedFiles = [...files].sort((a,b) => {
-    const ai = order.indexOf(a.month), bi = order.indexOf(b.month);
-    return (ai===-1?99:ai)-(bi===-1?99:bi);
-  });
-
-  for (let i = 0; i < sortedFiles.length; i++) {
-    const u = sortedFiles[i];
-    const yearInfo = yearOrder.find(o => o.month === u.month) || {yr:2025};
-    const yr = yearInfo.yr;
-    const mm = String(MONTHS.indexOf(u.month)+1).padStart(2,'0');
-    document.getElementById('progressFill').style.width = Math.round((i/sortedFiles.length)*100)+'%';
-
+  for(let i=0;i<sortedFiles.length;i++){
+    const u=sortedFiles[i];
+    const yi=yearOrder.find(o=>o.month===u.month)||{yr:2025};
+    const yr=yi.yr;
+    const mm=String(MONTHS.indexOf(u.month)+1).padStart(2,'0');
+    document.getElementById('progressFill').style.width=Math.round((i/sortedFiles.length)*100)+'%';
     showStatus('sb1','info',`Converting ${u.month} to images…`,true);
     let images;
-    try { images = await pdfToImages(u.file); }
-    catch(err) { showStatus('sb1','err',`Could not read PDF for ${u.month}: ${err.message}`); document.getElementById('extractBtn').disabled=false; return; }
-
-    if (i > 0) {
-      showStatus('sb1','info',`Pausing 15s before ${u.month} to stay within API limits…`,true);
-      await new Promise(r => setTimeout(r,15000));
-    }
+    try{images=await pdfToImages(u.file);}
+    catch(err){showStatus('sb1','err',`Could not read PDF for ${u.month}: ${err.message}`);document.getElementById('extractBtn').disabled=false;return;}
+    if(i>0){showStatus('sb1','info',`Pausing 15s before ${u.month} to stay within API limits…`,true);await new Promise(r=>setTimeout(r,15000));}
     showStatus('sb1','info',`Extracting ${u.month} (${i+1} of ${sortedFiles.length})…`,true);
-
-    const content = images.map(b64=>({type:'image',source:{type:'base64',media_type:'image/jpeg',data:b64}}));
-    content.push({type:'text',text:buildPrompt(u.month,yr,mm,cur,'exempt')});
-
-    try {
-      const resp = await fetch('/.netlify/functions/extract',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({model:'claude-opus-4-5',max_tokens:4000,messages:[{role:'user',content}]})
-      });
-      const data = await resp.json();
-      if (data.error) throw new Error(data.error.message);
-      const raw = data.content.map(b=>b.text||'').join('');
-      const clean = raw.replace(/```json|```/g,'').trim();
-      const parsed = JSON.parse(clean);
-      const rows = parsed.transactions || parsed;
-      rows.forEach(r => { r.month=u.month; r.year=yr; txs.push(r); });
-      if (parsed.balances) balances[u.month] = parsed.balances;
-    } catch(err) {
-      showStatus('sb1','err',`Extraction failed for ${u.month}: ${err.message}`);
-      document.getElementById('extractBtn').disabled=false;
-      document.getElementById('progressBar').style.display='none';
-      return;
-    }
+    const content=images.map(b64=>({type:'image',source:{type:'base64',media_type:'image/jpeg',data:b64}}));
+    content.push({type:'text',text:buildPrompt(u.month,yr,mm,cur)});
+    try{
+      const resp=await fetch('/.netlify/functions/extract',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-opus-4-5',max_tokens:4000,messages:[{role:'user',content}]})});
+      const data=await resp.json();
+      if(data.error)throw new Error(data.error.message);
+      const raw=data.content.map(b=>b.text||'').join('');
+      const clean=raw.replace(/```json|```/g,'').trim();
+      const parsed=JSON.parse(clean);
+      const rows=parsed.transactions||parsed;
+      rows.forEach(r=>{r.month=u.month;r.year=yr;txs.push(r);});
+      if(parsed.balances)balances[u.month]=parsed.balances;
+    }catch(err){showStatus('sb1','err',`Extraction failed for ${u.month}: ${err.message}`);document.getElementById('extractBtn').disabled=false;document.getElementById('progressBar').style.display='none';return;}
   }
-
   document.getElementById('progressFill').style.width='100%';
   setTimeout(()=>document.getElementById('progressBar').style.display='none',600);
-  const mths = [...new Set(txs.map(t=>t.month))];
-  const flagged = txs.filter(t=>t.notes&&t.notes.length>2).length;
-  showStatus('sb1','ok',`✓ Extracted ${txs.length} transactions across ${mths.length} month${mths.length>1?'s':''}${flagged?` · ${flagged} flagged for review`:''}`);
+  const mths=[...new Set(txs.map(t=>t.month))];
+  const flagged=txs.filter(t=>t.notes&&t.notes.length>2).length;
+  showStatus('sb1','ok',`✓ Extracted ${txs.length} transactions across ${mths.length} month${mths.length>1?'s':''}${flagged?` · ${flagged} flagged`:''}`);
   document.getElementById('extractBtn').disabled=false;
   goStep(2);
 }
 
-// ── Excel download ────────────────────────────────────────────────────────────
-function downloadExcel() {
-  if (!txs.length) { showStatus('sb2','err','No data to export — extract PDFs first'); return; }
-  const wb = XLSX.utils.book_new();
-  const sym = getCur();
-  const biz = document.getElementById('bizName').value || 'Cash Book';
-  const yearOrder = getYearOrder();
-  const mths = sortedMonths([...new Set(txs.map(t=>t.month))]);
+// ── Excel download with full formatting ──────────────────────────────────────
+function downloadExcel(){
+  if(!txs.length){showStatus('sb2','err','No data — extract PDFs first');return;}
+  const sym=getCur();
+  const biz=document.getElementById('bizName').value||'Cash Book';
+  const yearOrder=getYearOrder();
+  const mths=sortedMonths([...new Set(txs.map(t=>t.month))]);
+  const ALL_CATS=[...new Set(txs.filter(t=>t.type==='expense').map(t=>t.category||'General'))].sort();
+  const wb=XLSX.utils.book_new();
 
-  // All categories found
-  const allCats = [...new Set(txs.filter(t=>t.type==='expense').map(t=>t.category||'General'))].sort();
+  // ── Helper to style a cell ────────────────────────────────────────────────
+  function sc(ws,addr,value,type,fillRgb,fontColor,bold,sz,alignH,numFmt,italic){
+    if(!ws[addr])ws[addr]={};
+    ws[addr].v=value;
+    ws[addr].t=type||'s';
+    ws[addr].s={
+      font:xlFont(bold,sz||10,fontColor||C.BLACK,italic),
+      fill:fillRgb?xlFill(fillRgb):{patternType:'none'},
+      alignment:xlAlign(alignH||'left','center'),
+      border:xlBorder()
+    };
+    if(numFmt)ws[addr].z=numFmt;
+  }
 
-  // ── Summary sheet ─────────────────────────────────────────────────────────
-  const summarySheetName = 'Summary';
-  // We'll build summary with formulas linking to month sheets
-  // Headers: Month | Opening | Income | cat1 | cat2 | ... | Total Expenses | Closing | Net
-  const sumHeaders = ['Month','Opening Balance','Total Income',...allCats,'Total Expenses','Closing Balance','Net'];
-  const sumData = [[biz + ' — Cash Book'],[''],[...sumHeaders]];
+  // ── SUMMARY sheet ─────────────────────────────────────────────────────────
+  const wss={};
+  const sumCols=['Month','Opening Balance','Total Income',...ALL_CATS,'Total Expenses','Closing Balance','Net'];
+  const encodeCol=n=>{let s='';while(n>0){s=String.fromCharCode(65+(n-1)%26)+s;n=Math.floor((n-1)/26);}return s;};
 
-  // Year opening/closing
-  const firstMth = mths[0];
-  const lastMth  = mths[mths.length-1];
-  const yearOpening = balances[firstMth]?.opening ?? '';
-  const yearClosing = balances[lastMth]?.closing ?? '';
+  // Row 1: Title
+  wss['A1']={v:`${biz} — Cash Book Summary`,t:'s',s:{font:xlFont(true,14,C.WHITE),fill:xlFill(C.DARK_BLUE),alignment:xlAlign('center')}};
+  // Row 2: Year balances
+  const firstMth=mths[0],lastMth=mths[mths.length-1];
+  wss['A2']={v:'Year opening balance',t:'s',s:{font:xlFont(true,10,C.BLACK),fill:xlFill(C.AMBER_BG),border:xlBorder()}};
+  wss['B2']={v:balances[firstMth]?.opening||0,t:'n',z:'£#,##0.00',s:{font:xlFont(true,10,C.BLUE_TEXT),fill:xlFill(C.AMBER_BG),alignment:xlAlign('right'),border:xlBorder()}};
+  const closeLabelCol=encodeCol(sumCols.length-1);
+  const closeValCol=encodeCol(sumCols.length);
+  wss[`${closeLabelCol}2`]={v:'Year closing balance',t:'s',s:{font:xlFont(true,10,C.BLACK),fill:xlFill(C.AMBER_BG),border:xlBorder()}};
+  wss[`${closeValCol}2`]={v:balances[lastMth]?.closing||0,t:'n',z:'£#,##0.00',s:{font:xlFont(true,10,C.BLUE_TEXT),fill:xlFill(C.AMBER_BG),alignment:xlAlign('right'),border:xlBorder()}};
 
-  // Data rows — will link to month sheets via SUMIF formulas
-  mths.forEach(m => {
-    const mT  = txs.filter(t=>t.month===m);
-    const inc = mT.filter(t=>t.type==='income').reduce((s,t)=>s+num(t.amount),0);
-    const bal = balances[m]||{};
-    const catAmts = allCats.map(cat => mT.filter(t=>t.type==='expense'&&(t.category||'General')===cat).reduce((s,t)=>s+num(t.amount),0));
-    const totalExp = catAmts.reduce((s,v)=>s+v,0);
-    const net = inc - totalExp;
-    sumData.push([m, bal.opening??'', inc, ...catAmts, totalExp, bal.closing??'', net]);
+  // Row 3: Headers
+  sumCols.forEach((h,ci)=>{
+    const col=encodeCol(ci+1);
+    wss[`${col}3`]={v:h,t:'s',s:{font:xlFont(true,10,C.WHITE),fill:xlFill(C.MID_BLUE),alignment:xlAlign('center'),border:xlBorder()}};
+  });
+
+  // Data rows — category columns use SUMIF formulas linking to month sheets
+  // We need to track which rows in each month sheet have category data
+  // Store month sheet expense range info: {expStart, expEnd, catCol (C), amtCol (D)}
+  // We'll use SUMIF(month!C{expStart}:C{expEnd}, "Category", month!D{expStart}:D{expEnd})
+  // But we need to build month sheets first to know row ranges — so we'll do a two-pass approach:
+  // Pass 1: calculate row ranges for each month (same logic as month sheet builder)
+  // Pass 2: write summary with SUMIF formulas
+
+  const mthRanges={};
+  mths.forEach(m=>{
+    const mT=txs.filter(t=>t.month===m);
+    // Simulate row layout: title(1), blank(2), opening(3), blank(4), inc header(5), inc cols(6), inc rows start at 7
+    let r=7; // income data starts at row 7 (1=title,2=blank,3=opening,4=blank,5=inc header,6=inc col headers)
+    r+=mT.filter(t=>t.type==='income').length; // skip income rows
+    r+=1; // income total
+    r+=2; // blank + expense header
+    r+=1; // expense col headers
+    const expStart=r;
+    r+=mT.filter(t=>t.type==='expense').length;
+    const expEnd=r-1;
+    const incTotalRow=expStart-3; // income total is 3 rows before expStart (blank,expHdr,expColHdr)
+    const openRow=3;
+    const closeRow=expEnd+2; // closing is 2 rows after last expense (expense total + blank)
+    mthRanges[m]={expStart,expEnd,incTotalRow,openRow,closeRow};
+  });
+
+  let sumMaxRow=3;
+  mths.forEach((m,mi)=>{
+    const r=4+mi;sumMaxRow=r;
+    const mT=txs.filter(t=>t.month===m);
+    const bal=balances[m]||{};
+    const {expStart,expEnd,incTotalRow,openRow,closeRow}=mthRanges[m];
+    const mthRef=m.length>31?m.substring(0,31):m;
+
+    // Income — link to month sheet income total
+    const incFormula=`='${mthRef}'!D${incTotalRow}`;
+    // Category columns — SUMIF on month sheet expense rows
+    const catFormulas=ALL_CATS.map(cat=>`=SUMIF('${mthRef}'!C${expStart}:C${expEnd},"${cat}",'${mthRef}'!D${expStart}:D${expEnd})`);
+    // Total expenses — link to month sheet expense total (expEnd+1)
+    const expTotalFormula=`='${mthRef}'!D${expEnd+1}`;
+    // Opening/closing — link to month sheet
+    const openFormula=`='${mthRef}'!D${openRow}`;
+    const closeFormula=`='${mthRef}'!D${closeRow}`;
+    // Net
+    const incCol=encodeCol(3);
+    const expCol=encodeCol(3+ALL_CATS.length+1);
+    const netFormula=`=${incCol}${r}-${expCol}${r}`;
+
+    const rowVals=[
+      {v:m,t:'s',isAmt:false},
+      {v:openFormula,t:'n',isAmt:true},
+      {v:incFormula,t:'n',isAmt:true},
+      ...catFormulas.map(f=>({v:f,t:'n',isAmt:true})),
+      {v:expTotalFormula,t:'n',isAmt:true},
+      {v:closeFormula,t:'n',isAmt:true},
+      {v:netFormula,t:'n',isAmt:true},
+    ];
+    rowVals.forEach(({v,t,isAmt},ci)=>{
+      const col=encodeCol(ci+1);
+      wss[`${col}${r}`]={
+        v,t,
+        z:isAmt?'£#,##0.00':undefined,
+        s:{font:xlFont(false,10,C.BLACK),fill:xlFill(C.GRAY_50),alignment:xlAlign(ci===0?'left':'right'),border:xlBorder()}
+      };
+    });
   });
 
   // Totals row
-  const dataStartRow = 4; // 1-indexed: row 1=title, 2=blank, 3=headers, 4+=data
-  const dataEndRow   = dataStartRow + mths.length - 1;
-  const colLetter = n => { let s=''; while(n>0){s=String.fromCharCode(65+(n-1)%26)+s;n=Math.floor((n-1)/26);} return s; };
-  const totalsRow = ['TOTAL'];
-  // Col B = Opening (first month), Col C = Income sum, then cats, then Total Exp, Closing (last month), Net
-  totalsRow.push(''); // Opening — just show year opening
-  for (let c = 3; c <= sumHeaders.length; c++) {
-    const col = colLetter(c);
-    totalsRow.push(`=SUM(${col}${dataStartRow}:${col}${dataEndRow})`);
-  }
-  sumData.push([]);
-  sumData.push(totalsRow);
+  const tr=sumMaxRow+2;
+  sumCols.forEach((h,ci)=>{
+    const col=encodeCol(ci+1);
+    if(ci===0){wss[`${col}${tr}`]={v:'TOTAL',t:'s',s:{font:xlFont(true,10),fill:xlFill(C.LIGHT_BLUE),border:xlBorder()}};}
+    else if(ci===1||ci===sumCols.length-2){}// opening/closing blanks
+    else{
+      wss[`${col}${tr}`]={v:`=SUM(${col}4:${col}${sumMaxRow})`,t:'n',z:'£#,##0.00',s:{font:xlFont(true,10),fill:xlFill(C.LIGHT_BLUE),alignment:xlAlign('right'),border:xlBorder()}};
+    }
+    if(!wss[`${col}${tr}`])wss[`${col}${tr}`]={v:'',t:'s',s:{fill:xlFill(C.LIGHT_BLUE),border:xlBorder()}};
+  });
 
-  // Year balances row
-  sumData.push([]);
-  sumData.push(['Year opening balance', yearOpening]);
-  sumData.push(['Year closing balance', yearClosing]);
-
-  const wsSummary = XLSX.utils.aoa_to_sheet(sumData);
-  const sumColWidths = [{wch:16},{wch:16},{wch:14},...allCats.map(c=>({wch:Math.max(14,c.length+2)})),{wch:16},{wch:16},{wch:12}];
-  wsSummary['!cols'] = sumColWidths;
-  XLSX.utils.book_append_sheet(wb, wsSummary, summarySheetName);
+  wss['!ref']=`A1:${encodeCol(sumCols.length)}${tr}`;
+  wss['!cols']=sumCols.map((h,i)=>({wch:i===0?14:Math.max(14,h.length+2)}));
+  wss['!merges']=[{s:{r:0,c:0},e:{r:0,c:sumCols.length-1}}];
+  XLSX.utils.book_append_sheet(wb,wss,'Summary');
 
   // ── Month sheets ──────────────────────────────────────────────────────────
-  mths.forEach(m => {
-    const mT  = txs.filter(t=>t.month===m);
-    const bal = balances[m]||{};
-    const inc = mT.filter(t=>t.type==='income').reduce((s,t)=>s+num(t.amount),0);
-    const exp = mT.filter(t=>t.type==='expense').reduce((s,t)=>s+num(t.amount),0);
+  mths.forEach(m=>{
+    const mT=txs.filter(t=>t.month===m);
+    const bal=balances[m]||{};
+    const ws={};
+    let r=1;
 
-    const data = [
-      [biz + ' — ' + m],[],
-      ['Opening bank balance','','',bal.opening??'(enter)'],[],
-      ['MONEY IN (Income)'],
-      ['Ref','Description','Category',`Amount (${sym})`],
-    ];
+    // Title row
+    ws[`A${r}`]={v:`${biz} — ${m}`,t:'s',s:{font:xlFont(true,13,C.WHITE),fill:xlFill(C.DARK_BLUE),alignment:xlAlign('center')}};
+    ws['!merges']=[{s:{r:r-1,c:0},e:{r:r-1,c:4}}];
+    r+=2;
+
+    // Opening balance
+    const openRow=r;
+    ws[`A${r}`]={v:'Opening bank balance',t:'s',s:{font:xlFont(true,10),fill:xlFill(C.AMBER_BG),border:xlBorder()}};
+    ['B','C'].forEach(c=>{ws[`${c}${r}`]={v:'',t:'s',s:{fill:xlFill(C.AMBER_BG),border:xlBorder()}};});
+    ws[`D${r}`]={v:bal.opening||0,t:'n',z:'£#,##0.00',s:{font:xlFont(true,10,C.BLUE_TEXT),fill:xlFill(C.AMBER_BG),alignment:xlAlign('right'),border:xlBorder()}};
+    ws[`E${r}`]={v:'',t:'s',s:{fill:xlFill(C.AMBER_BG),border:xlBorder()}};
+    ws['!merges'].push({s:{r:r-1,c:0},e:{r:r-1,c:2}},{s:{r:r-1,c:3},e:{r:r-1,c:4}});
+    r+=2;
+
+    // Income header
+    ws[`A${r}`]={v:'MONEY IN (Income)',t:'s',s:{font:xlFont(true,10,C.WHITE),fill:xlFill(C.GREEN_HDR),alignment:xlAlign('center')}};
+    ws['!merges'].push({s:{r:r-1,c:0},e:{r:r-1,c:4}});
+    r++;
+
+    // Income col headers
+    ['Ref','Description','Category',`Amount (${sym})`,'Notes'].forEach((h,ci)=>{
+      ws[`${encodeCol(ci+1)}${r}`]={v:h,t:'s',s:{font:xlFont(true,9),fill:xlFill(C.GREEN_BG),alignment:xlAlign(ci===3?'right':'left'),border:xlBorder()}};
+    });
+    r++;
+    const incStart=r;
     mT.filter(t=>t.type==='income').forEach(t=>{
-      const flag = t.notes&&t.notes.length>2 ? '⚠ '+t.notes : '';
-      data.push([t.reference||'', t.description, t.category, num(t.amount), flag]);
+      const flagged=t.notes&&t.notes.length>2;
+      const fillC=flagged?C.AMBER_BG:C.WHITE;
+      ws[`A${r}`]={v:t.reference||'',t:'s',s:{font:xlFont(false,10),fill:xlFill(fillC),border:xlBorder()}};
+      ws[`B${r}`]={v:t.description||'',t:'s',s:{font:xlFont(false,10),fill:xlFill(fillC),border:xlBorder()}};
+      ws[`C${r}`]={v:t.category||'',t:'s',s:{font:xlFont(false,10),fill:xlFill(fillC),border:xlBorder()}};
+      ws[`D${r}`]={v:num(t.amount),t:'n',z:'£#,##0.00',s:{font:xlFont(false,10),fill:xlFill(fillC),alignment:xlAlign('right'),border:xlBorder()}};
+      ws[`E${r}`]={v:t.notes||'',t:'s',s:{font:xlFont(false,9,C.AMBER),fill:xlFill(fillC),border:xlBorder()}};
+      r++;
     });
-    const incStartRow = 7;
-    const incEndRow   = incStartRow + mT.filter(t=>t.type==='income').length - 1;
-    data.push(['','','Total Income', `=SUM(D${incStartRow}:D${incEndRow})`]);
-    data.push([]);
-    data.push(['MONEY OUT (Expenses)']);
-    data.push(['Ref','Description','Category',`Amount (${sym})`,'Notes']);
-    const expHeaderRow = data.length;
-    mT.filter(t=>t.type==='expense').forEach(t=>{
-      const flag = t.notes&&t.notes.length>2 ? '⚠ '+t.notes : '';
-      data.push([t.reference||'', t.description, t.category, num(t.amount), flag]);
-    });
-    const expStartRow = expHeaderRow + 1;
-    const expEndRow   = expStartRow + mT.filter(t=>t.type==='expense').length - 1;
-    data.push(['','','Total Expenses',`=SUM(D${expStartRow}:D${expEndRow})`]);
-    data.push([]);
-    data.push(['Closing bank balance','','',bal.closing??'(enter)']);
-    data.push([]);
-    data.push(['— Reconciliation —']);
-    data.push(['Opening balance','','',bal.opening||0]);
-    const reconOpenRow = data.length;
-    data.push(['+ Income','','',`=SUM(D${incStartRow}:D${incEndRow})`]);
-    data.push(['− Expenses','','',(mT.filter(t=>t.type==='expense').reduce((s,t)=>s-num(t.amount),0))]);
-    data.push(['= Calculated closing','','',`=D${reconOpenRow}+D${reconOpenRow+1}+D${reconOpenRow+2}`]);
-    if (bal.closing!=null) {
-      data.push(['Book closing balance','','',bal.closing]);
-      data.push(['Difference','','',`=D${reconOpenRow+3}-D${data.length}`]);
-    }
+    const incEnd=r-1;
+    // Income total
+    ws[`A${r}`]={v:'Total Income',t:'s',s:{font:xlFont(true,10),fill:xlFill(C.GREEN_BG),alignment:xlAlign('right'),border:xlBorder()}};
+    ws[`B${r}`]={v:'',t:'s',s:{fill:xlFill(C.GREEN_BG),border:xlBorder()}};
+    ws[`C${r}`]={v:'',t:'s',s:{fill:xlFill(C.GREEN_BG),border:xlBorder()}};
+    ws[`D${r}`]={v:`=SUM(D${incStart}:D${incEnd})`,t:'n',z:'£#,##0.00',s:{font:xlFont(true,10),fill:xlFill(C.GREEN_BG),alignment:xlAlign('right'),border:xlBorder()}};
+    ws[`E${r}`]={v:'',t:'s',s:{fill:xlFill(C.GREEN_BG),border:xlBorder()}};
+    ws['!merges'].push({s:{r:r-1,c:0},e:{r:r-1,c:2}});
+    const incTotalRow=r;r+=2;
 
-    const ws = XLSX.utils.aoa_to_sheet(data);
-    ws['!cols'] = [{wch:8},{wch:28},{wch:20},{wch:14},{wch:40}];
-    XLSX.utils.book_append_sheet(wb, ws, m.substring(0,31));
+    // Expenses header
+    ws[`A${r}`]={v:'MONEY OUT (Expenses)',t:'s',s:{font:xlFont(true,10,C.WHITE),fill:xlFill(C.RED_HDR),alignment:xlAlign('center')}};
+    ws['!merges'].push({s:{r:r-1,c:0},e:{r:r-1,c:4}});r++;
+    ['Ref','Description','Category',`Amount (${sym})`,'Notes'].forEach((h,ci)=>{
+      ws[`${encodeCol(ci+1)}${r}`]={v:h,t:'s',s:{font:xlFont(true,9),fill:xlFill(C.RED_BG),alignment:xlAlign(ci===3?'right':'left'),border:xlBorder()}};
+    });
+    r++;
+    const expStart=r;
+    mT.filter(t=>t.type==='expense').forEach(t=>{
+      const flagged=t.notes&&t.notes.length>2;
+      const fillC=flagged?C.AMBER_BG:C.WHITE;
+      ws[`A${r}`]={v:t.reference||'',t:'s',s:{font:xlFont(false,10),fill:xlFill(fillC),border:xlBorder()}};
+      ws[`B${r}`]={v:t.description||'',t:'s',s:{font:xlFont(false,10),fill:xlFill(fillC),border:xlBorder()}};
+      ws[`C${r}`]={v:t.category||'',t:'s',s:{font:xlFont(false,10),fill:xlFill(fillC),border:xlBorder()}};
+      ws[`D${r}`]={v:num(t.amount),t:'n',z:'£#,##0.00',s:{font:xlFont(false,10),fill:xlFill(fillC),alignment:xlAlign('right'),border:xlBorder()}};
+      ws[`E${r}`]={v:t.notes||'',t:'s',s:{font:xlFont(false,9,flagged?C.AMBER:C.BLACK),fill:xlFill(fillC),border:xlBorder()}};
+      r++;
+    });
+    const expEnd=r-1;
+    ws[`A${r}`]={v:'Total Expenses',t:'s',s:{font:xlFont(true,10),fill:xlFill(C.RED_BG),alignment:xlAlign('right'),border:xlBorder()}};
+    ws[`B${r}`]={v:'',t:'s',s:{fill:xlFill(C.RED_BG),border:xlBorder()}};
+    ws[`C${r}`]={v:'',t:'s',s:{fill:xlFill(C.RED_BG),border:xlBorder()}};
+    ws[`D${r}`]={v:`=SUM(D${expStart}:D${expEnd})`,t:'n',z:'£#,##0.00',s:{font:xlFont(true,10),fill:xlFill(C.RED_BG),alignment:xlAlign('right'),border:xlBorder()}};
+    ws[`E${r}`]={v:'',t:'s',s:{fill:xlFill(C.RED_BG),border:xlBorder()}};
+    ws['!merges'].push({s:{r:r-1,c:0},e:{r:r-1,c:2}});
+    const expTotalRow=r;r+=2;
+
+    // Closing balance
+    const closeRow=r;
+    ws[`A${r}`]={v:'Closing bank balance',t:'s',s:{font:xlFont(true,10),fill:xlFill(C.AMBER_BG),border:xlBorder()}};
+    ['B','C'].forEach(c=>{ws[`${c}${r}`]={v:'',t:'s',s:{fill:xlFill(C.AMBER_BG),border:xlBorder()}};});
+    ws[`D${r}`]={v:bal.closing||0,t:'n',z:'£#,##0.00',s:{font:xlFont(true,10,C.BLUE_TEXT),fill:xlFill(C.AMBER_BG),alignment:xlAlign('right'),border:xlBorder()}};
+    ws[`E${r}`]={v:'',t:'s',s:{fill:xlFill(C.AMBER_BG),border:xlBorder()}};
+    ws['!merges'].push({s:{r:r-1,c:0},e:{r:r-1,c:2}},{s:{r:r-1,c:3},e:{r:r-1,c:4}});
+    r+=2;
+
+    // Reconciliation
+    ws[`A${r}`]={v:'Reconciliation',t:'s',s:{font:xlFont(true,10,C.WHITE),fill:xlFill(C.MID_BLUE),alignment:xlAlign('center')}};
+    ws['!merges'].push({s:{r:r-1,c:0},e:{r:r-1,c:4}});r++;
+    const recon=[
+      ['Opening balance',    `=D${openRow}`],
+      ['+ Total income',     `=D${incTotalRow}`],
+      ['- Total expenses',   `=-D${expTotalRow}`],
+      ['Calculated closing', `=D${openRow}+D${incTotalRow}-D${expTotalRow}`],
+      ['Book closing balance',`=D${closeRow}`],
+      ['Difference',         `=D${openRow}+D${incTotalRow}-D${expTotalRow}-D${closeRow}`],
+    ];
+    recon.forEach(([lbl,formula],ri)=>{
+      const isDiff=ri===5;
+      ws[`A${r}`]={v:lbl,t:'s',s:{font:xlFont(ri===3||isDiff),fill:xlFill(C.LIGHT_BLUE),border:xlBorder()}};
+      ws[`B${r}`]={v:'',t:'s',s:{fill:xlFill(C.LIGHT_BLUE),border:xlBorder()}};
+      ws[`C${r}`]={v:'',t:'s',s:{fill:xlFill(C.LIGHT_BLUE),border:xlBorder()}};
+      ws[`D${r}`]={v:formula,t:'n',z:'£#,##0.00',s:{font:xlFont(ri===3||isDiff,10,isDiff?C.RED_TEXT:C.BLACK),fill:xlFill(C.LIGHT_BLUE),alignment:xlAlign('right'),border:xlBorder()}};
+      ws[`E${r}`]={v:'',t:'s',s:{fill:xlFill(C.LIGHT_BLUE),border:xlBorder()}};
+      ws['!merges'].push({s:{r:r-1,c:0},e:{r:r-1,c:2}},{s:{r:r-1,c:3},e:{r:r-1,c:4}});
+      r++;
+    });
+
+    ws['!ref']=`A1:E${r-1}`;
+    ws['!cols']=[{wch:7},{wch:28},{wch:18},{wch:14},{wch:35}];
+    XLSX.utils.book_append_sheet(wb,ws,m.substring(0,31));
   });
 
   XLSX.writeFile(wb,'cash_book.xlsx');
-  showStatus('sb2','ok','✓ Excel downloaded — correct it then upload below to generate the journal');
+  showStatus('sb2','ok','✓ Excel downloaded with full formatting — correct it then upload below');
 }
 
-// ── Excel upload & journal generation ────────────────────────────────────────
-const xlFileInput = document.getElementById('xlFileInput');
-const xlDropZone  = document.getElementById('xlDropZone');
-xlFileInput.addEventListener('change', e => { if(e.target.files[0]) readExcelAndBuildJournal(e.target.files[0]); });
-xlDropZone.addEventListener('dragover', e=>{e.preventDefault();xlDropZone.classList.add('drag');});
+// ── Excel upload & journal ────────────────────────────────────────────────────
+const xlFileInput=document.getElementById('xlFileInput');
+const xlDropZone=document.getElementById('xlDropZone');
+xlFileInput.addEventListener('change',e=>{if(e.target.files[0])readExcelAndBuildJournal(e.target.files[0]);});
+xlDropZone.addEventListener('dragover',e=>{e.preventDefault();xlDropZone.classList.add('drag');});
 xlDropZone.addEventListener('dragleave',()=>xlDropZone.classList.remove('drag'));
 xlDropZone.addEventListener('drop',e=>{e.preventDefault();xlDropZone.classList.remove('drag');if(e.dataTransfer.files[0])readExcelAndBuildJournal(e.dataTransfer.files[0]);});
 
-async function readExcelAndBuildJournal(file) {
-  const statusEl = document.getElementById('xlFileStatus');
-  statusEl.innerHTML = '<div class="status info"><div class="spinner"></div> Reading Excel…</div>';
-
-  try {
-    const ab = await file.arrayBuffer();
-    const wb = XLSX.read(ab, {type:'array'});
-
-    // Find Summary sheet
-    const summaryName = wb.SheetNames.find(n => n.toLowerCase()==='summary');
-    if (!summaryName) throw new Error('No Summary sheet found in the Excel file');
-    const ws = wb.Sheets[summaryName];
-    const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
-
-    // Find header row — look for row containing "Month"
-    let headerRow = -1;
-    for (let i = 0; i < rows.length; i++) {
-      if (rows[i].some(c => String(c).toLowerCase()==='month')) { headerRow = i; break; }
+async function readExcelAndBuildJournal(file){
+  const statusEl=document.getElementById('xlFileStatus');
+  statusEl.innerHTML='<div class="status info"><div class="spinner"></div> Reading Excel…</div>';
+  try{
+    const ab=await file.arrayBuffer();
+    const wb=XLSX.read(ab,{type:'array'});
+    const summaryName=wb.SheetNames.find(n=>n.toLowerCase()==='summary');
+    if(!summaryName)throw new Error('No Summary sheet found');
+    const ws=wb.Sheets[summaryName];
+    const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+    let headerRow=-1;
+    for(let i=0;i<rows.length;i++){if(rows[i].some(c=>String(c).toLowerCase()==='month')){headerRow=i;break;}}
+    if(headerRow===-1)throw new Error('Could not find header row in Summary sheet');
+    const headers=rows[headerRow].map(h=>String(h).trim());
+    const monthCol=headers.indexOf('Month');
+    const incomeCol=headers.findIndex(h=>h.toLowerCase().includes('total income'));
+    const expenseCol=headers.findIndex(h=>h.toLowerCase().includes('total expenses'));
+    const openingCol=headers.findIndex(h=>h.toLowerCase().includes('opening'));
+    const closingCol=headers.findIndex(h=>h.toLowerCase().includes('closing'));
+    const catCols=[];
+    for(let c=incomeCol+1;c<expenseCol;c++){if(headers[c])catCols.push({name:headers[c],col:c});}
+    const monthData=[];
+    for(let r=headerRow+1;r<rows.length;r++){
+      const row=rows[r];
+      const month=String(row[monthCol]||'').trim();
+      if(!month||month.toUpperCase()==='TOTAL'||month.startsWith('Year')||month.startsWith('—'))continue;
+      if(!MONTHS.includes(month))continue;
+      monthData.push({month,income:num(row[incomeCol]),totalExp:num(row[expenseCol]),cats:catCols.map(c=>({name:c.name,amount:num(row[c.col])}))});
     }
-    if (headerRow === -1) throw new Error('Could not find header row in Summary sheet');
+    if(!monthData.length)throw new Error('No month data found in Summary sheet');
 
-    const headers = rows[headerRow].map(h => String(h).trim());
-    const monthCol    = headers.indexOf('Month');
-    const incomeCol   = headers.findIndex(h => h.toLowerCase().includes('income'));
-    const expenseCol  = headers.findIndex(h => h.toLowerCase().includes('total expenses'));
-    const openingCol  = headers.findIndex(h => h.toLowerCase().includes('opening'));
-    const closingCol  = headers.findIndex(h => h.toLowerCase().includes('closing'));
+    // Build journal totals
+    const totals={};let totalIncome=0;
+    monthData.forEach(m=>{totalIncome+=m.income;m.cats.forEach(c=>{if(!totals[c.name])totals[c.name]=0;totals[c.name]+=c.amount;});});
 
-    // Find category columns — everything between income and total expenses
-    const catCols = [];
-    for (let c = incomeCol+1; c < expenseCol; c++) {
-      if (headers[c]) catCols.push({name:headers[c], col:c});
-    }
-
-    // Read data rows
-    const monthData = [];
-    for (let r = headerRow+1; r < rows.length; r++) {
-      const row = rows[r];
-      const month = String(row[monthCol]||'').trim();
-      if (!month || month.toUpperCase()==='TOTAL' || month.startsWith('Year') || month.startsWith('—')) continue;
-      if (!MONTHS.includes(month)) continue;
-      const income = num(row[incomeCol]);
-      const totalExp = num(row[expenseCol]);
-      const cats = catCols.map(c => ({name:c.name, amount:num(row[c.col])}));
-      monthData.push({month, income, totalExp, cats});
-    }
-
-    if (!monthData.length) throw new Error('No month data found in Summary sheet');
-
-    // Build journal — totals across all months
-    const totals = {};
-    let totalIncome = 0;
-    monthData.forEach(m => {
-      totalIncome += m.income;
-      m.cats.forEach(c => {
-        if (!totals[c.name]) totals[c.name] = 0;
-        totals[c.name] += c.amount;
-      });
-    });
-
-    // Year opening/closing — look for them in the sheet
-    let yearOpening = 0, yearClosing = 0;
-    for (let r = headerRow+1; r < rows.length; r++) {
-      const row = rows[r];
-      const label = String(row[0]||'').toLowerCase();
-      if (label.includes('year opening')) yearOpening = num(row[1]);
-      if (label.includes('year closing')) yearClosing = num(row[1]);
-    }
-    // Fallback: use first month opening, last month closing from data
-    if (!yearOpening && openingCol>-1) {
-      for (let r = headerRow+1; r < rows.length; r++) {
-        if (MONTHS.includes(String(rows[r][monthCol]||'').trim())) { yearOpening = num(rows[r][openingCol]); break; }
+    // Year opening/closing — scan all cells in each row for year balance labels
+    let yearOpening=0,yearClosing=0;
+    for(let r=0;r<rows.length;r++){
+      const row=rows[r];
+      for(let c=0;c<row.length;c++){
+        const label=String(row[c]||'').toLowerCase();
+        if(label.includes('year opening')&&row[c+1]!=null)yearOpening=num(row[c+1]);
+        if(label.includes('year closing')&&row[c+1]!=null)yearClosing=num(row[c+1]);
       }
     }
-    if (!yearClosing && closingCol>-1) {
-      for (let r = rows.length-1; r > headerRow; r--) {
-        if (MONTHS.includes(String(rows[r][monthCol]||'').trim())) { yearClosing = num(rows[r][closingCol]); break; }
+    // Fallback: use first/last month opening/closing from data rows
+    if(!yearOpening){
+      const firstMthRow=rows.slice(headerRow+1).find(r=>MONTHS.includes(String(r[monthCol]||'').trim()));
+      if(firstMthRow&&openingCol>-1)yearOpening=num(firstMthRow[openingCol]);
+    }
+    if(!yearClosing){
+      for(let r=rows.length-1;r>headerRow;r--){
+        if(MONTHS.includes(String(rows[r][monthCol]||'').trim())&&closingCol>-1){yearClosing=num(rows[r][closingCol]);break;}
       }
     }
+    // Bank = net movement: total income - total expenses (not closing-opening, as closing-opening includes non-cash items)
+    // Actually bank = closing - opening is correct for cash book
+    // But if formulas haven't recalculated, use totals instead
+    const calculatedClosing=yearOpening+totalIncome-Object.values(totals).reduce((s,v)=>s+v,0);
+    if(!yearClosing)yearClosing=calculatedClosing;
 
-    // Bank movement = closing - opening
-    const bankMovement = yearClosing - yearOpening;
-    const totalDebits  = Object.values(totals).reduce((s,v)=>s+v,0) + (bankMovement < 0 ? Math.abs(bankMovement) : 0);
-    const totalCredits = totalIncome + (bankMovement >= 0 ? bankMovement : 0);
+    journalRows=[];
+    journalRows.push({desc:'Sales / Income',debit:'',credit:fmt(totalIncome)});
+    Object.entries(totals).filter(([,v])=>v>0).forEach(([cat,amt])=>journalRows.push({desc:cat,debit:fmt(amt),credit:''}));
+    // Bank is the balancing figure: total credits - total debits of all other lines
+    const otherDebits=Object.values(totals).reduce((s,v)=>s+v,0);
+    const otherCredits=totalIncome;
+    const bankAmt=otherCredits-otherDebits;
+    if(bankAmt>=0){journalRows.push({desc:'Bank',debit:fmt(bankAmt),credit:''});}
+    else{journalRows.push({desc:'Bank',debit:'',credit:fmt(Math.abs(bankAmt))});}
 
-    // Build journal rows
-    journalRows = [];
-    // Income → Credit
-    journalRows.push({desc:'Sales / Income', debit:'', credit:fmt(totalIncome)});
-    // Expense categories → Debit
-    Object.entries(totals).filter(([,v])=>v>0).forEach(([cat,amt])=>{
-      journalRows.push({desc:cat, debit:fmt(amt), credit:''});
-    });
-    // Bank → debit if went up (assets increased), credit if went down
-    if (bankMovement >= 0) {
-      journalRows.push({desc:'Bank', debit:fmt(bankMovement), credit:''});
-    } else {
-      journalRows.push({desc:'Bank', debit:'', credit:fmt(Math.abs(bankMovement))});
-    }
+    const drTotal=journalRows.reduce((s,r)=>s+num(r.debit),0);
+    const crTotal=journalRows.reduce((s,r)=>s+num(r.credit),0);
+    const balanced=Math.abs(drTotal-crTotal)<0.02;
 
-    // Totals
-    const drTotal = journalRows.reduce((s,r)=>s+num(r.debit),0);
-    const crTotal = journalRows.reduce((s,r)=>s+num(r.credit),0);
-    const balanced = Math.abs(drTotal-crTotal)<0.02;
-
-    // Render preview
-    let html = `<div class="table-wrap"><table>
+    let html=`<div class="table-wrap"><table>
       <thead><tr><th style="width:40px"></th><th>Description</th><th style="text-align:right;width:140px">Debit</th><th style="text-align:right;width:140px">Credit</th></tr></thead>
-      <tbody>
-      ${journalRows.map(r=>`<tr>
-        <td></td>
-        <td>${esc(r.desc)}</td>
+      <tbody>${journalRows.map(r=>`<tr><td></td><td>${esc(r.desc)}</td>
         <td style="text-align:right" class="${r.debit?'debit-val':''}">${r.debit?'£'+r.debit:''}</td>
-        <td style="text-align:right" class="${r.credit?'credit-val':''}">${r.credit?'£'+r.credit:''}</td>
-      </tr>`).join('')}
-      <tr class="total-row">
-        <td></td><td><strong>TOTAL</strong></td>
+        <td style="text-align:right" class="${r.credit?'credit-val':''}">${r.credit?'£'+r.credit:''}</td></tr>`).join('')}
+      <tr class="total-row"><td></td><td><strong>TOTAL</strong></td>
         <td style="text-align:right"><strong>£${fmt(drTotal)}</strong></td>
-        <td style="text-align:right"><strong>£${fmt(crTotal)}</strong></td>
-      </tr>
+        <td style="text-align:right"><strong>£${fmt(crTotal)}</strong></td></tr>
       </tbody></table></div>
       <div class="status ${balanced?'ok':'warn'}" style="margin-top:12px">
-        ${balanced?'✓ Journal balances':'⚠ Journal does not balance — check for missing data · Difference: £'+fmt(Math.abs(drTotal-crTotal))}
+        ${balanced?'✓ Journal balances':'⚠ Journal does not balance — difference: £'+fmt(Math.abs(drTotal-crTotal))}
       </div>`;
-
-    document.getElementById('journalPreview').innerHTML = html;
-    document.getElementById('journalSection').style.display = 'block';
-    statusEl.innerHTML = `<div class="status ok">✓ Excel read successfully — ${monthData.length} months, ${journalRows.length} journal lines</div>`;
-
-  } catch(err) {
-    statusEl.innerHTML = `<div class="status err">✗ ${err.message}</div>`;
-    console.error(err);
-  }
+    document.getElementById('journalPreview').innerHTML=html;
+    document.getElementById('journalSection').style.display='block';
+    statusEl.innerHTML=`<div class="status ok">✓ Excel read — ${monthData.length} months, ${journalRows.length} journal lines</div>`;
+  }catch(err){statusEl.innerHTML=`<div class="status err">✗ ${err.message}</div>`;console.error(err);}
 }
 
-// ── Journal download ──────────────────────────────────────────────────────────
-function downloadJournal() {
-  let csv = ',Description,Debit,Credit\n';
-  journalRows.forEach(r => csv += `,"${r.desc}",${r.debit},${r.credit}\n`);
-  const dr = journalRows.reduce((s,r)=>s+num(r.debit),0);
-  const cr = journalRows.reduce((s,r)=>s+num(r.credit),0);
-  csv += `,,${fmt(dr)},${fmt(cr)}\n`;
-  dlFile('journal.csv', csv, 'text/csv');
+function downloadJournal(){
+  let csv=',Description,Debit,Credit\n';
+  journalRows.forEach(r=>csv+=`,"${r.desc}",${r.debit},${r.credit}\n`);
+  const dr=journalRows.reduce((s,r)=>s+num(r.debit),0);
+  const cr=journalRows.reduce((s,r)=>s+num(r.credit),0);
+  csv+=`,,${fmt(dr)},${fmt(cr)}\n`;
+  dlFile('journal.csv',csv,'text/csv');
   showStatus('sb3','ok','✓ Journal downloaded — ready for IRIS TB Mapper');
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function getCur()  { const v=document.getElementById('currency').value; return v==='GBP'?'£':v==='USD'?'$':'€'; }
-function num(v)    { return parseFloat(String(v).replace(/[£,$,€,\s]/g,''))||0; }
-function fmt(v)    { return num(v).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2}); }
-function esc(s)    { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
-function dlFile(name,content,type) { const a=document.createElement('a'); a.href='data:'+type+';charset=utf-8,'+encodeURIComponent(content); a.download=name; a.click(); }
-function showStatus(id,type,msg,spin) { const el=document.getElementById(id); el.innerHTML=`<div class="status ${type}">${spin?'<div class="spinner"></div>':''} ${msg}</div>`; }
-function goStep(n) {
-  [1,2].forEach(i=>{
-    document.getElementById(`panel${i}`).className='panel'+(i===n?' active':'');
-    const s=document.getElementById(`step${i}`);
-    s.className='step'+(i===n?' active':i<n?' done':'');
-  });
-}
+function getCur(){const v=document.getElementById('currency').value;return v==='GBP'?'£':v==='USD'?'$':'€';}
+function num(v){return parseFloat(String(v).replace(/[£$€,\s]/g,''))||0;}
+function fmt(v){return num(v).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
+function dlFile(name,content,type){const a=document.createElement('a');a.href='data:'+type+';charset=utf-8,'+encodeURIComponent(content);a.download=name;a.click();}
+function showStatus(id,type,msg,spin){const el=document.getElementById(id);el.innerHTML=`<div class="status ${type}">${spin?'<div class="spinner"></div>':''} ${msg}</div>`;}
+function goStep(n){[1,2].forEach(i=>{document.getElementById(`panel${i}`).className='panel'+(i===n?' active':'');const s=document.getElementById(`step${i}`);s.className='step'+(i===n?' active':i<n?' done':'');});}
 </script>
 </body>
 </html>
