@@ -438,6 +438,10 @@ async function extractAll() {
     try { images = await pdfToImages(u.file); }
     catch (err) { showStatus('sb1', 'err', `Could not read PDF for ${u.month}: ${err.message}`); document.getElementById('extractBtn').disabled = false; return; }
 
+    if (i > 0) {
+      showStatus('sb1', 'info', `Pausing 15s before ${u.month} to stay within API limits…`, true);
+      await new Promise(r => setTimeout(r, 15000));
+    }
     showStatus('sb1', 'info', `Extracting ${u.month} (${i + 1} of ${files.length})…`, true);
 
     const content = images.map(b64 => ({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } }));
