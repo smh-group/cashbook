@@ -219,12 +219,22 @@ function sortedMonths(list){
 }
 
 // ── File handling ─────────────────────────────────────────────────────────────
-const fileInput=document.getElementById('fileInput');
-const dropZone=document.getElementById('dropZone');
-fileInput.addEventListener('change',e=>addFiles(Array.from(e.target.files)));
-dropZone.addEventListener('dragover',e=>{e.preventDefault();dropZone.classList.add('drag');});
-dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('drag'));
-dropZone.addEventListener('drop',e=>{e.preventDefault();dropZone.classList.remove('drag');addFiles(Array.from(e.dataTransfer.files));});
+// Init event listeners after DOM ready
+document.addEventListener('DOMContentLoaded',()=>{
+  const fileInput=document.getElementById('fileInput');
+  const dropZone=document.getElementById('dropZone');
+  fileInput.addEventListener('change',e=>addFiles(Array.from(e.target.files)));
+  dropZone.addEventListener('dragover',e=>{e.preventDefault();dropZone.classList.add('drag');});
+  dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('drag'));
+  dropZone.addEventListener('drop',e=>{e.preventDefault();dropZone.classList.remove('drag');addFiles(Array.from(e.dataTransfer.files));});
+
+  const xlFileInput=document.getElementById('xlFileInput');
+  const xlDropZone=document.getElementById('xlDropZone');
+  xlFileInput.addEventListener('change',e=>{if(e.target.files[0])readExcelAndBuildJournal(e.target.files[0]);});
+  xlDropZone.addEventListener('dragover',e=>{e.preventDefault();xlDropZone.classList.add('drag');});
+  xlDropZone.addEventListener('dragleave',()=>xlDropZone.classList.remove('drag'));
+  xlDropZone.addEventListener('drop',e=>{e.preventDefault();xlDropZone.classList.remove('drag');if(e.dataTransfer.files[0])readExcelAndBuildJournal(e.dataTransfer.files[0]);});
+});
 
 function addFiles(fs){fs.forEach(f=>{if(!files.find(u=>u.name===f.name))files.push({file:f,month:guessMth(f.name)});});renderFileList();checkReady();}
 function guessMth(name){const n=name.toLowerCase();return MONTHS.find(m=>n.includes(m.toLowerCase()))||'';}
@@ -500,12 +510,7 @@ function downloadExcel(){
 
 
 // ── Excel upload & journal ────────────────────────────────────────────────────
-const xlFileInput=document.getElementById('xlFileInput');
-const xlDropZone=document.getElementById('xlDropZone');
-xlFileInput.addEventListener('change',e=>{if(e.target.files[0])readExcelAndBuildJournal(e.target.files[0]);});
-xlDropZone.addEventListener('dragover',e=>{e.preventDefault();xlDropZone.classList.add('drag');});
-xlDropZone.addEventListener('dragleave',()=>xlDropZone.classList.remove('drag'));
-xlDropZone.addEventListener('drop',e=>{e.preventDefault();xlDropZone.classList.remove('drag');if(e.dataTransfer.files[0])readExcelAndBuildJournal(e.dataTransfer.files[0]);});
+
 
 async function readExcelAndBuildJournal(file){
   const statusEl=document.getElementById('xlFileStatus');
@@ -621,12 +626,7 @@ function goStep(n){[1,2].forEach(i=>{document.getElementById(`panel${i}`).classN
 // ── Excel download (plain SheetJS, reliable formulas) ──────────────────────
 
 // ── Excel upload & journal ────────────────────────────────────────────────────
-const xlFileInput=document.getElementById('xlFileInput');
-const xlDropZone=document.getElementById('xlDropZone');
-xlFileInput.addEventListener('change',e=>{if(e.target.files[0])readExcelAndBuildJournal(e.target.files[0]);});
-xlDropZone.addEventListener('dragover',e=>{e.preventDefault();xlDropZone.classList.add('drag');});
-xlDropZone.addEventListener('dragleave',()=>xlDropZone.classList.remove('drag'));
-xlDropZone.addEventListener('drop',e=>{e.preventDefault();xlDropZone.classList.remove('drag');if(e.dataTransfer.files[0])readExcelAndBuildJournal(e.dataTransfer.files[0]);});
+
 
 async function readExcelAndBuildJournal(file){
   const statusEl=document.getElementById('xlFileStatus');
