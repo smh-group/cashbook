@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cash Book Extractor</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -172,7 +172,7 @@ tbody tr:hover{background:var(--gray-50)}
       <div class="upload-zone-excel" id="xlDropZone" onclick="document.getElementById('xlFileInput').click()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
         <p>Upload corrected cash_book.xlsx</p>
-        <small>App reads the Summary sheet to build the journal</small>
+        <small>App reads the Summary sheet to build the journal · If you added a new category in a month sheet, add a matching column to the Summary sheet before uploading</small>
       </div>
       <input type="file" id="xlFileInput" accept=".xlsx,.xls" style="display:none">
       <div id="xlFileStatus" style="margin-top:10px"></div>
@@ -199,7 +199,21 @@ pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/p
 const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
 let files=[],txs=[],balances={},journalRows=[];
 
+// ── Colours (RGB without #) ──────────────────────────────────────────────────
+const C = {
+  DARK_BLUE:'1E3A5F', MID_BLUE:'2563EB', LIGHT_BLUE:'DBEAFE',
+  GREEN_HDR:'16A34A', GREEN_BG:'DCFCE7',
+  RED_HDR:'DC2626',   RED_BG:'FEE2E2',
+  AMBER_BG:'FEF3C7',  GRAY_50:'F9FAFB',  WHITE:'FFFFFF',
+  BLACK:'000000',     BLUE_TEXT:'0000FF', RED_TEXT:'DC2626'
+};
 
+function xlFont(bold,sz,color,italic){return{name:'Arial',bold:!!bold,sz:sz||10,color:{rgb:color||C.BLACK},italic:!!italic};}
+function xlFill(rgb){return{patternType:'solid',fgColor:{rgb}};}
+function xlAlign(h,v,wrap){return{horizontal:h||'left',vertical:v||'center',wrapText:!!wrap};}
+function xlBorder(rgb){const s={style:'thin',color:{rgb:rgb||'E5E7EB'}};return{top:s,bottom:s,left:s,right:s};}
+function xlCell(v,type,style){return{v,t:type||'s',s:style||{}};}
+function xlNum(v,style){return{v:parseFloat(v)||0,t:'n',s:style||{},z:'£#,##0.00'};}
 
 // ── Year ordering ─────────────────────────────────────────────────────────────
 function getYearOrder(){
@@ -219,22 +233,12 @@ function sortedMonths(list){
 }
 
 // ── File handling ─────────────────────────────────────────────────────────────
-// Init event listeners after DOM ready
-document.addEventListener('DOMContentLoaded',()=>{
-  const fileInput=document.getElementById('fileInput');
-  const dropZone=document.getElementById('dropZone');
-  fileInput.addEventListener('change',e=>addFiles(Array.from(e.target.files)));
-  dropZone.addEventListener('dragover',e=>{e.preventDefault();dropZone.classList.add('drag');});
-  dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('drag'));
-  dropZone.addEventListener('drop',e=>{e.preventDefault();dropZone.classList.remove('drag');addFiles(Array.from(e.dataTransfer.files));});
-
-  const xlFileInput=document.getElementById('xlFileInput');
-  const xlDropZone=document.getElementById('xlDropZone');
-  xlFileInput.addEventListener('change',e=>{if(e.target.files[0])readExcelAndBuildJournal(e.target.files[0]);});
-  xlDropZone.addEventListener('dragover',e=>{e.preventDefault();xlDropZone.classList.add('drag');});
-  xlDropZone.addEventListener('dragleave',()=>xlDropZone.classList.remove('drag'));
-  xlDropZone.addEventListener('drop',e=>{e.preventDefault();xlDropZone.classList.remove('drag');if(e.dataTransfer.files[0])readExcelAndBuildJournal(e.dataTransfer.files[0]);});
-});
+const fileInput=document.getElementById('fileInput');
+const dropZone=document.getElementById('dropZone');
+fileInput.addEventListener('change',e=>addFiles(Array.from(e.target.files)));
+dropZone.addEventListener('dragover',e=>{e.preventDefault();dropZone.classList.add('drag');});
+dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('drag'));
+dropZone.addEventListener('drop',e=>{e.preventDefault();dropZone.classList.remove('drag');addFiles(Array.from(e.dataTransfer.files));});
 
 function addFiles(fs){fs.forEach(f=>{if(!files.find(u=>u.name===f.name))files.push({file:f,month:guessMth(f.name)});});renderFileList();checkReady();}
 function guessMth(name){const n=name.toLowerCase();return MONTHS.find(m=>n.includes(m.toLowerCase()))||'';}
@@ -340,26 +344,137 @@ async function extractAll(){
   goStep(2);
 }
 
-// ── Excel download ───────────────────────────────────────────────────────────
+// ── Excel download with full formatting ──────────────────────────────────────
 function downloadExcel(){
   if(!txs.length){showStatus('sb2','err','No data — extract PDFs first');return;}
   const sym=getCur();
   const biz=document.getElementById('bizName').value||'Cash Book';
+  const yearOrder=getYearOrder();
   const mths=sortedMonths([...new Set(txs.map(t=>t.month))]);
   const ALL_CATS=[...new Set(txs.filter(t=>t.type==='expense').map(t=>t.category||'General'))].sort();
   const wb=XLSX.utils.book_new();
-  const mthMeta={};
 
-  // Helper: write a formula cell directly onto a worksheet
-  function setFormula(ws, addr, formula){
-    ws[addr]={t:'n', f:formula};
+  // ── Helper to style a cell ────────────────────────────────────────────────
+  function sc(ws,addr,value,type,fillRgb,fontColor,bold,sz,alignH,numFmt,italic){
+    if(!ws[addr])ws[addr]={};
+    ws[addr].v=value;
+    ws[addr].t=type||'s';
+    ws[addr].s={
+      font:xlFont(bold,sz||10,fontColor||C.BLACK,italic),
+      fill:fillRgb?xlFill(fillRgb):{patternType:'none'},
+      alignment:xlAlign(alignH||'left','center'),
+      border:xlBorder()
+    };
+    if(numFmt)ws[addr].z=numFmt;
   }
-  function setVal(ws, addr, value, type){
-    ws[addr]={t:type||'s', v:value};
-  }
-  function setNum(ws, addr, value){
-    ws[addr]={t:'n', v:value||0};
-  }
+
+  // ── SUMMARY sheet ─────────────────────────────────────────────────────────
+  const wss={};
+  const sumCols=['Month','Opening Balance','Total Income',...ALL_CATS,'Total Expenses','Closing Balance','Net'];
+  const encodeCol=n=>{let s='';while(n>0){s=String.fromCharCode(65+(n-1)%26)+s;n=Math.floor((n-1)/26);}return s;};
+
+  // Row 1: Title
+  wss['A1']={v:`${biz} — Cash Book Summary`,t:'s',s:{font:xlFont(true,14,C.WHITE),fill:xlFill(C.DARK_BLUE),alignment:xlAlign('center')}};
+  // Row 2: Year balances
+  const firstMth=mths[0],lastMth=mths[mths.length-1];
+  wss['A2']={v:'Year opening balance',t:'s',s:{font:xlFont(true,10,C.BLACK),fill:xlFill(C.AMBER_BG),border:xlBorder()}};
+  wss['B2']={v:balances[firstMth]?.opening||0,t:'n',z:'£#,##0.00',s:{font:xlFont(true,10,C.BLUE_TEXT),fill:xlFill(C.AMBER_BG),alignment:xlAlign('right'),border:xlBorder()}};
+  const closeLabelCol=encodeCol(sumCols.length-1);
+  const closeValCol=encodeCol(sumCols.length);
+  wss[`${closeLabelCol}2`]={v:'Year closing balance',t:'s',s:{font:xlFont(true,10,C.BLACK),fill:xlFill(C.AMBER_BG),border:xlBorder()}};
+  wss[`${closeValCol}2`]={v:balances[lastMth]?.closing||0,t:'n',z:'£#,##0.00',s:{font:xlFont(true,10,C.BLUE_TEXT),fill:xlFill(C.AMBER_BG),alignment:xlAlign('right'),border:xlBorder()}};
+
+  // Row 3: Headers
+  sumCols.forEach((h,ci)=>{
+    const col=encodeCol(ci+1);
+    wss[`${col}3`]={v:h,t:'s',s:{font:xlFont(true,10,C.WHITE),fill:xlFill(C.MID_BLUE),alignment:xlAlign('center'),border:xlBorder()}};
+  });
+
+  // Data rows — category columns use SUMIF formulas linking to month sheets
+  // We need to track which rows in each month sheet have category data
+  // Store month sheet expense range info: {expStart, expEnd, catCol (C), amtCol (D)}
+  // We'll use SUMIF(month!C{expStart}:C{expEnd}, "Category", month!D{expStart}:D{expEnd})
+  // But we need to build month sheets first to know row ranges — so we'll do a two-pass approach:
+  // Pass 1: calculate row ranges for each month (same logic as month sheet builder)
+  // Pass 2: write summary with SUMIF formulas
+
+  const mthRanges={};
+  mths.forEach(m=>{
+    const mT=txs.filter(t=>t.month===m);
+    // Simulate row layout: title(1), blank(2), opening(3), blank(4), inc header(5), inc cols(6), inc rows start at 7
+    let r=7; // income data starts at row 7 (1=title,2=blank,3=opening,4=blank,5=inc header,6=inc col headers)
+    r+=mT.filter(t=>t.type==='income').length; // skip income rows
+    r+=1; // income total
+    r+=2; // blank + expense header
+    r+=1; // expense col headers
+    const expStart=r;
+    r+=mT.filter(t=>t.type==='expense').length;
+    const expEnd=r-1;
+    const incTotalRow=expStart-3; // income total is 3 rows before expStart (blank,expHdr,expColHdr)
+    const openRow=3;
+    const closeRow=expEnd+2; // closing is 2 rows after last expense (expense total + blank)
+    mthRanges[m]={expStart,expEnd,incTotalRow,openRow,closeRow};
+  });
+
+  let sumMaxRow=3;
+  mths.forEach((m,mi)=>{
+    const r=4+mi;sumMaxRow=r;
+    const mT=txs.filter(t=>t.month===m);
+    const bal=balances[m]||{};
+    const {expStart,expEnd,incTotalRow,openRow,closeRow}=mthRanges[m];
+    const mthRef=m.length>31?m.substring(0,31):m;
+
+    // Income — link to month sheet income total
+    const incFormula=`='${mthRef}'!D${incTotalRow}`;
+    // Category columns — SUMIF on month sheet expense rows
+    const catFormulas=ALL_CATS.map(cat=>`=SUMIF('${mthRef}'!C${expStart}:C${expEnd},"${cat}",'${mthRef}'!D${expStart}:D${expEnd})`);
+    // Total expenses — link to month sheet expense total (expEnd+1)
+    const expTotalFormula=`='${mthRef}'!D${expEnd+1}`;
+    // Opening/closing — link to month sheet
+    const openFormula=`='${mthRef}'!D${openRow}`;
+    const closeFormula=`='${mthRef}'!D${closeRow}`;
+    // Net
+    const incCol=encodeCol(3);
+    const expCol=encodeCol(3+ALL_CATS.length+1);
+    const netFormula=`=${incCol}${r}-${expCol}${r}`;
+
+    // Helper: write a formula cell correctly for xlsx-js-style
+    const fCell=(formula,style)=>({v:formula.startsWith('=')?formula:'='+formula,t:'n',z:'£#,##0.00',s:style});
+    const tCell=(val,style)=>({v:val,t:'s',s:style});
+    const amtStyle={font:xlFont(false,10,C.BLACK),fill:xlFill(C.GRAY_50),alignment:xlAlign('right'),border:xlBorder()};
+    const lblStyle={font:xlFont(false,10,C.BLACK),fill:xlFill(C.GRAY_50),alignment:xlAlign('left'),border:xlBorder()};
+
+    const rowVals=[
+      tCell(m,lblStyle),
+      fCell(openFormula,amtStyle),
+      fCell(incFormula,amtStyle),
+      ...catFormulas.map(f=>fCell(f,amtStyle)),
+      fCell(expTotalFormula,amtStyle),
+      fCell(closeFormula,amtStyle),
+      fCell(netFormula,amtStyle),
+    ];
+    rowVals.forEach((cell,ci)=>{
+      const col=encodeCol(ci+1);
+      wss[`${col}${r}`]=cell;
+    });
+  });
+
+  // Totals row
+  const tr=sumMaxRow+2;
+  sumCols.forEach((h,ci)=>{
+    const col=encodeCol(ci+1);
+    if(ci===0){wss[`${col}${tr}`]={v:'TOTAL',t:'s',s:{font:xlFont(true,10),fill:xlFill(C.LIGHT_BLUE),border:xlBorder()}};}
+    else if(ci===1||ci===sumCols.length-2){}// opening/closing blanks
+    else{
+      wss[`${col}${tr}`]={v:`=SUM(${col}4:${col}${sumMaxRow})`,t:'n',z:'£#,##0.00',s:{font:xlFont(true,10),fill:xlFill(C.LIGHT_BLUE),alignment:xlAlign('right'),border:xlBorder()}};
+    }
+    if(!wss[`${col}${tr}`])wss[`${col}${tr}`]={v:'',t:'s',s:{fill:xlFill(C.LIGHT_BLUE),border:xlBorder()}};
+  });
+
+  wss['!ref']=`A1:${encodeCol(sumCols.length)}${tr}`;
+  wss['!cols']=sumCols.map((h,i)=>({wch:i===0?14:Math.max(14,h.length+2)}));
+  wss['!merges']=[{s:{r:0,c:0},e:{r:0,c:sumCols.length-1}}];
+  XLSX.utils.book_append_sheet(wb,wss,'Summary');
 
   // ── Month sheets ──────────────────────────────────────────────────────────
   mths.forEach(m=>{
@@ -368,149 +483,125 @@ function downloadExcel(){
     const ws={};
     let r=1;
 
-    // Row 1: title
-    setVal(ws,`A${r}`,`${biz} — ${m}`); r+=2;
-
-    // Row 3: opening balance
-    const openRow=r;
-    setVal(ws,`A${r}`,'Opening bank balance');
-    if(bal.opening!=null) setNum(ws,`D${r}`,bal.opening);
+    // Title row
+    ws[`A${r}`]={v:`${biz} — ${m}`,t:'s',s:{font:xlFont(true,13,C.WHITE),fill:xlFill(C.DARK_BLUE),alignment:xlAlign('center')}};
+    ws['!merges']=[{s:{r:r-1,c:0},e:{r:r-1,c:4}}];
     r+=2;
 
-    // Row 5: income header
-    setVal(ws,`A${r}`,'MONEY IN (Income)'); r++;
-    // Row 6: income col headers
-    ['Ref','Description','Category',`Amount (${sym})`,'Notes'].forEach((h,i)=>setVal(ws,String.fromCharCode(65+i)+r,h));
+    // Opening balance
+    const openRow=r;
+    ws[`A${r}`]={v:'Opening bank balance',t:'s',s:{font:xlFont(true,10),fill:xlFill(C.AMBER_BG),border:xlBorder()}};
+    ['B','C'].forEach(c=>{ws[`${c}${r}`]={v:'',t:'s',s:{fill:xlFill(C.AMBER_BG),border:xlBorder()}};});
+    ws[`D${r}`]={v:bal.opening||0,t:'n',z:'£#,##0.00',s:{font:xlFont(true,10,C.BLUE_TEXT),fill:xlFill(C.AMBER_BG),alignment:xlAlign('right'),border:xlBorder()}};
+    ws[`E${r}`]={v:'',t:'s',s:{fill:xlFill(C.AMBER_BG),border:xlBorder()}};
+    ws['!merges'].push({s:{r:r-1,c:0},e:{r:r-1,c:2}},{s:{r:r-1,c:3},e:{r:r-1,c:4}});
+    r+=2;
+
+    // Income header
+    ws[`A${r}`]={v:'MONEY IN (Income)',t:'s',s:{font:xlFont(true,10,C.WHITE),fill:xlFill(C.GREEN_HDR),alignment:xlAlign('center')}};
+    ws['!merges'].push({s:{r:r-1,c:0},e:{r:r-1,c:4}});
     r++;
 
-    // Income data rows
+    // Income col headers
+    ['Ref','Description','Category',`Amount (${sym})`,'Notes'].forEach((h,ci)=>{
+      ws[`${encodeCol(ci+1)}${r}`]={v:h,t:'s',s:{font:xlFont(true,9),fill:xlFill(C.GREEN_BG),alignment:xlAlign(ci===3?'right':'left'),border:xlBorder()}};
+    });
+    r++;
     const incStart=r;
     mT.filter(t=>t.type==='income').forEach(t=>{
-      setVal(ws,`A${r}`,t.reference||'');
-      setVal(ws,`B${r}`,t.description||'');
-      setVal(ws,`C${r}`,t.category||'');
-      setNum(ws,`D${r}`,num(t.amount));
-      setVal(ws,`E${r}`,t.notes||'');
+      const flagged=t.notes&&t.notes.length>2;
+      const fillC=flagged?C.AMBER_BG:C.WHITE;
+      ws[`A${r}`]={v:t.reference||'',t:'s',s:{font:xlFont(false,10),fill:xlFill(fillC),border:xlBorder()}};
+      ws[`B${r}`]={v:t.description||'',t:'s',s:{font:xlFont(false,10),fill:xlFill(fillC),border:xlBorder()}};
+      ws[`C${r}`]={v:t.category||'',t:'s',s:{font:xlFont(false,10),fill:xlFill(fillC),border:xlBorder()}};
+      ws[`D${r}`]={v:num(t.amount),t:'n',z:'£#,##0.00',s:{font:xlFont(false,10),fill:xlFill(fillC),alignment:xlAlign('right'),border:xlBorder()}};
+      ws[`E${r}`]={v:t.notes||'',t:'s',s:{font:xlFont(false,9,C.AMBER),fill:xlFill(fillC),border:xlBorder()}};
       r++;
     });
     const incEnd=r-1;
+    // Income total
+    ws[`A${r}`]={v:'Total Income',t:'s',s:{font:xlFont(true,10),fill:xlFill(C.GREEN_BG),alignment:xlAlign('right'),border:xlBorder()}};
+    ws[`B${r}`]={v:'',t:'s',s:{fill:xlFill(C.GREEN_BG),border:xlBorder()}};
+    ws[`C${r}`]={v:'',t:'s',s:{fill:xlFill(C.GREEN_BG),border:xlBorder()}};
+    ws[`D${r}`]={v:`=SUM(D${incStart}:D${incEnd})`,t:'n',z:'£#,##0.00',s:{font:xlFont(true,10),fill:xlFill(C.GREEN_BG),alignment:xlAlign('right'),border:xlBorder()}};
+    ws[`E${r}`]={v:'',t:'s',s:{fill:xlFill(C.GREEN_BG),border:xlBorder()}};
+    ws['!merges'].push({s:{r:r-1,c:0},e:{r:r-1,c:2}});
+    const incTotalRow=r;r+=2;
 
-    // Total income
-    const incTotalRow=r;
-    setVal(ws,`A${r}`,''); setVal(ws,`B${r}`,''); setVal(ws,`C${r}`,'Total Income');
-    setFormula(ws,`D${r}`,`SUM(D${incStart}:D${incEnd})`);
-    r+=2;
-
-    // Expense header
-    setVal(ws,`A${r}`,'MONEY OUT (Expenses)'); r++;
-    // Expense col headers
-    ['Ref','Description','Category',`Amount (${sym})`,'Notes'].forEach((h,i)=>setVal(ws,String.fromCharCode(65+i)+r,h));
+    // Expenses header
+    ws[`A${r}`]={v:'MONEY OUT (Expenses)',t:'s',s:{font:xlFont(true,10,C.WHITE),fill:xlFill(C.RED_HDR),alignment:xlAlign('center')}};
+    ws['!merges'].push({s:{r:r-1,c:0},e:{r:r-1,c:4}});r++;
+    ['Ref','Description','Category',`Amount (${sym})`,'Notes'].forEach((h,ci)=>{
+      ws[`${encodeCol(ci+1)}${r}`]={v:h,t:'s',s:{font:xlFont(true,9),fill:xlFill(C.RED_BG),alignment:xlAlign(ci===3?'right':'left'),border:xlBorder()}};
+    });
     r++;
-
-    // Expense data rows
     const expStart=r;
     mT.filter(t=>t.type==='expense').forEach(t=>{
-      setVal(ws,`A${r}`,t.reference||'');
-      setVal(ws,`B${r}`,t.description||'');
-      setVal(ws,`C${r}`,t.category||'');
-      setNum(ws,`D${r}`,num(t.amount));
-      setVal(ws,`E${r}`,t.notes&&t.notes.length>2?t.notes:'');
+      const flagged=t.notes&&t.notes.length>2;
+      const fillC=flagged?C.AMBER_BG:C.WHITE;
+      ws[`A${r}`]={v:t.reference||'',t:'s',s:{font:xlFont(false,10),fill:xlFill(fillC),border:xlBorder()}};
+      ws[`B${r}`]={v:t.description||'',t:'s',s:{font:xlFont(false,10),fill:xlFill(fillC),border:xlBorder()}};
+      ws[`C${r}`]={v:t.category||'',t:'s',s:{font:xlFont(false,10),fill:xlFill(fillC),border:xlBorder()}};
+      ws[`D${r}`]={v:num(t.amount),t:'n',z:'£#,##0.00',s:{font:xlFont(false,10),fill:xlFill(fillC),alignment:xlAlign('right'),border:xlBorder()}};
+      ws[`E${r}`]={v:t.notes||'',t:'s',s:{font:xlFont(false,9,flagged?C.AMBER:C.BLACK),fill:xlFill(fillC),border:xlBorder()}};
       r++;
     });
     const expEnd=r-1;
-
-    // Total expenses
-    const expTotalRow=r;
-    setVal(ws,`A${r}`,''); setVal(ws,`B${r}`,''); setVal(ws,`C${r}`,'Total Expenses');
-    setFormula(ws,`D${r}`,`SUM(D${expStart}:D${expEnd})`);
-    r+=2;
+    ws[`A${r}`]={v:'Total Expenses',t:'s',s:{font:xlFont(true,10),fill:xlFill(C.RED_BG),alignment:xlAlign('right'),border:xlBorder()}};
+    ws[`B${r}`]={v:'',t:'s',s:{fill:xlFill(C.RED_BG),border:xlBorder()}};
+    ws[`C${r}`]={v:'',t:'s',s:{fill:xlFill(C.RED_BG),border:xlBorder()}};
+    ws[`D${r}`]={v:`=SUM(D${expStart}:D${expEnd})`,t:'n',z:'£#,##0.00',s:{font:xlFont(true,10),fill:xlFill(C.RED_BG),alignment:xlAlign('right'),border:xlBorder()}};
+    ws[`E${r}`]={v:'',t:'s',s:{fill:xlFill(C.RED_BG),border:xlBorder()}};
+    ws['!merges'].push({s:{r:r-1,c:0},e:{r:r-1,c:2}});
+    const expTotalRow=r;r+=2;
 
     // Closing balance
     const closeRow=r;
-    setVal(ws,`A${r}`,'Closing bank balance');
-    if(bal.closing!=null) setNum(ws,`D${r}`,bal.closing);
+    ws[`A${r}`]={v:'Closing bank balance',t:'s',s:{font:xlFont(true,10),fill:xlFill(C.AMBER_BG),border:xlBorder()}};
+    ['B','C'].forEach(c=>{ws[`${c}${r}`]={v:'',t:'s',s:{fill:xlFill(C.AMBER_BG),border:xlBorder()}};});
+    ws[`D${r}`]={v:bal.closing||0,t:'n',z:'£#,##0.00',s:{font:xlFont(true,10,C.BLUE_TEXT),fill:xlFill(C.AMBER_BG),alignment:xlAlign('right'),border:xlBorder()}};
+    ws[`E${r}`]={v:'',t:'s',s:{fill:xlFill(C.AMBER_BG),border:xlBorder()}};
+    ws['!merges'].push({s:{r:r-1,c:0},e:{r:r-1,c:2}},{s:{r:r-1,c:3},e:{r:r-1,c:4}});
     r+=2;
 
     // Reconciliation
-    setVal(ws,`A${r}`,'Reconciliation'); r++;
-    setVal(ws,`A${r}`,'Opening balance');       setFormula(ws,`D${r}`,`D${openRow}`); r++;
-    setVal(ws,`A${r}`,'+ Total income');        setFormula(ws,`D${r}`,`D${incTotalRow}`); r++;
-    setVal(ws,`A${r}`,'- Total expenses');      setFormula(ws,`D${r}`,`-D${expTotalRow}`); r++;
-    setVal(ws,`A${r}`,'Calculated closing');    setFormula(ws,`D${r}`,`D${openRow}+D${incTotalRow}-D${expTotalRow}`); r++;
-    setVal(ws,`A${r}`,'Book closing balance');  setFormula(ws,`D${r}`,`D${closeRow}`); r++;
-    setVal(ws,`A${r}`,'Difference');            setFormula(ws,`D${r}`,`D${openRow}+D${incTotalRow}-D${expTotalRow}-D${closeRow}`);
+    ws[`A${r}`]={v:'Reconciliation',t:'s',s:{font:xlFont(true,10,C.WHITE),fill:xlFill(C.MID_BLUE),alignment:xlAlign('center')}};
+    ws['!merges'].push({s:{r:r-1,c:0},e:{r:r-1,c:4}});r++;
+    const recon=[
+      ['Opening balance',    `D${openRow}`],
+      ['+ Total income',     `D${incTotalRow}`],
+      ['- Total expenses',   `-D${expTotalRow}`],
+      ['Calculated closing', `D${openRow}+D${incTotalRow}-D${expTotalRow}`],
+      ['Book closing balance',`D${closeRow}`],
+      ['Difference',         `D${openRow}+D${incTotalRow}-D${expTotalRow}-D${closeRow}`],
+    ];
+    recon.forEach(([lbl,formula],ri)=>{
+      const isDiff=ri===5;
+      ws[`A${r}`]={v:lbl,t:'s',s:{font:xlFont(ri===3||isDiff),fill:xlFill(C.LIGHT_BLUE),border:xlBorder()}};
+      ws[`B${r}`]={v:'',t:'s',s:{fill:xlFill(C.LIGHT_BLUE),border:xlBorder()}};
+      ws[`C${r}`]={v:'',t:'s',s:{fill:xlFill(C.LIGHT_BLUE),border:xlBorder()}};
+      ws[`D${r}`]={v:'='+formula,t:'n',z:'£#,##0.00',s:{font:xlFont(ri===3||isDiff,10,isDiff?C.RED_TEXT:C.BLACK),fill:xlFill(C.LIGHT_BLUE),alignment:xlAlign('right'),border:xlBorder()}};
+      ws[`E${r}`]={v:'',t:'s',s:{fill:xlFill(C.LIGHT_BLUE),border:xlBorder()}};
+      ws['!merges'].push({s:{r:r-1,c:0},e:{r:r-1,c:2}},{s:{r:r-1,c:3},e:{r:r-1,c:4}});
+      r++;
+    });
 
-    ws['!ref']=`A1:E${r}`;
-    ws['!cols']=[{wch:8},{wch:28},{wch:20},{wch:14},{wch:35}];
-    mthMeta[m]={openRow,incTotalRow,expStart,expEnd,expTotalRow,closeRow};
+    ws['!ref']=`A1:E${r-1}`;
+    ws['!cols']=[{wch:7},{wch:28},{wch:18},{wch:14},{wch:35}];
     XLSX.utils.book_append_sheet(wb,ws,m.substring(0,31));
   });
 
-  // ── Summary sheet ─────────────────────────────────────────────────────────
-  const ws2={};
-  const sumCols=['Month','Opening Balance','Total Income',...ALL_CATS,'Total Expenses','Closing Balance','Net'];
-  const nc=sumCols.length;
-  const colLetter=n=>{let s='';while(n>0){s=String.fromCharCode(65+(n-1)%26)+s;n=Math.floor((n-1)/26);}return s;};
-
-  // Row 1: title
-  setVal(ws2,'A1',`${biz} — Cash Book Summary`);
-  // Row 2: blank
-  // Row 3: year balances
-  const firstMth=mths[0],lastMth=mths[mths.length-1];
-  setVal(ws2,'A3','Year opening balance');
-  if(balances[firstMth]?.opening!=null) setNum(ws2,'B3',balances[firstMth].opening);
-  setVal(ws2,`${colLetter(nc-1)}3`,'Year closing balance');
-  if(balances[lastMth]?.closing!=null) setNum(ws2,`${colLetter(nc)}3`,balances[lastMth].closing);
-  // Row 4: blank
-  // Row 5: headers
-  sumCols.forEach((h,i)=>setVal(ws2,`${colLetter(i+1)}5`,h));
-
-  // Data rows starting at row 6
-  const dataStart=6;
-  mths.forEach((m,mi)=>{
-    const r=dataStart+mi;
-    const meta=mthMeta[m];
-    const ref=m.length>31?m.substring(0,31):m;
-    const {expStart,expEnd,incTotalRow,openRow,expTotalRow,closeRow}=meta;
-
-    setVal(ws2,`A${r}`,m);
-    setFormula(ws2,`B${r}`,`'${ref}'!D${openRow}`);
-    setFormula(ws2,`C${r}`,`'${ref}'!D${incTotalRow}`);
-    ALL_CATS.forEach((cat,ci)=>{
-      setFormula(ws2,`${colLetter(4+ci)}${r}`,`SUMIF('${ref}'!C${expStart}:C${expEnd},"${cat}",'${ref}'!D${expStart}:D${expEnd})`);
-    });
-    setFormula(ws2,`${colLetter(4+ALL_CATS.length)}${r}`,`'${ref}'!D${expTotalRow}`);
-    setFormula(ws2,`${colLetter(4+ALL_CATS.length+1)}${r}`,`'${ref}'!D${closeRow}`);
-    setFormula(ws2,`${colLetter(4+ALL_CATS.length+2)}${r}`,`C${r}-${colLetter(4+ALL_CATS.length)}${r}`);
-  });
-
-  // Totals row
-  const dataEnd=dataStart+mths.length-1;
-  const totR=dataEnd+2;
-  setVal(ws2,`A${totR}`,'TOTAL');
-  // Skip B (opening) and closing col
-  for(let ci=2;ci<=nc;ci++){
-    const col=colLetter(ci);
-    const skipCols=[2, 4+ALL_CATS.length+1]; // opening balance col, closing balance col
-    if(!skipCols.includes(ci)){
-      setFormula(ws2,`${col}${totR}`,`SUM(${col}${dataStart}:${col}${dataEnd})`);
-    }
-  }
-
-  ws2['!ref']=`A1:${colLetter(nc)}${totR}`;
-  ws2['!cols']=sumCols.map((h,i)=>({wch:i===0?14:Math.max(14,h.length+2)}));
-  XLSX.utils.book_append_sheet(wb,ws2,'Summary');
-
-  // Reorder: Summary first
-  wb.SheetNames=['Summary',...mths.map(m=>m.substring(0,31))];
-
-  XLSX.writeFile(wb,'cash_book.xlsx');
-  showStatus('sb2','ok','✓ Excel downloaded — correct it then upload below to generate the journal');
+  XLSX.writeFile(wb,'cash_book.xlsx',{cellFormula:true,bookSST:false});
+  showStatus('sb2','ok','✓ Excel downloaded with full formatting — correct it then upload below');
 }
 
-
 // ── Excel upload & journal ────────────────────────────────────────────────────
-
+const xlFileInput=document.getElementById('xlFileInput');
+const xlDropZone=document.getElementById('xlDropZone');
+xlFileInput.addEventListener('change',e=>{if(e.target.files[0])readExcelAndBuildJournal(e.target.files[0]);});
+xlDropZone.addEventListener('dragover',e=>{e.preventDefault();xlDropZone.classList.add('drag');});
+xlDropZone.addEventListener('dragleave',()=>xlDropZone.classList.remove('drag'));
+xlDropZone.addEventListener('drop',e=>{e.preventDefault();xlDropZone.classList.remove('drag');if(e.dataTransfer.files[0])readExcelAndBuildJournal(e.dataTransfer.files[0]);});
 
 async function readExcelAndBuildJournal(file){
   const statusEl=document.getElementById('xlFileStatus');
@@ -607,130 +698,10 @@ async function readExcelAndBuildJournal(file){
 
 function downloadJournal(){
   let csv=',Description,Debit,Credit\n';
-  // Strip commas from amounts so CSV doesn't break
-  const stripComma=v=>String(v).replace(/,/g,'');
-  journalRows.forEach(r=>csv+=`,"${r.desc}",${stripComma(r.debit)},${stripComma(r.credit)}\n`);
+  journalRows.forEach(r=>csv+=`,"${r.desc}",${r.debit},${r.credit}\n`);
   const dr=journalRows.reduce((s,r)=>s+num(r.debit),0);
   const cr=journalRows.reduce((s,r)=>s+num(r.credit),0);
-  csv+=`,,${stripComma(fmt(dr))},${stripComma(fmt(cr))}\n`;
-  dlFile('journal.csv',csv,'text/csv');
-  showStatus('sb3','ok','✓ Journal downloaded — ready for IRIS TB Mapper');
-}
-
-function getCur(){const v=document.getElementById('currency').value;return v==='GBP'?'£':v==='USD'?'$':'€';}
-function num(v){return parseFloat(String(v).replace(/[£$€,\s]/g,''))||0;}
-function fmt(v){return num(v).toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2});}
-function esc(s){return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
-function dlFile(name,content,type){const a=document.createElement('a');a.href='data:'+type+';charset=utf-8,'+encodeURIComponent(content);a.download=name;a.click();}
-function showStatus(id,type,msg,spin){const el=document.getElementById(id);el.innerHTML=`<div class="status ${type}">${spin?'<div class="spinner"></div>':''} ${msg}</div>`;}
-function goStep(n){[1,2].forEach(i=>{document.getElementById(`panel${i}`).className='panel'+(i===n?' active':'');const s=document.getElementById(`step${i}`);s.className='step'+(i===n?' active':i<n?' done':'');});}
-
-// ── Excel download (plain SheetJS, reliable formulas) ──────────────────────
-
-// ── Excel upload & journal ────────────────────────────────────────────────────
-
-
-async function readExcelAndBuildJournal(file){
-  const statusEl=document.getElementById('xlFileStatus');
-  statusEl.innerHTML='<div class="status info"><div class="spinner"></div> Reading Excel…</div>';
-  try{
-    const ab=await file.arrayBuffer();
-    const wb=XLSX.read(ab,{type:'array'});
-    const summaryName=wb.SheetNames.find(n=>n.toLowerCase()==='summary');
-    if(!summaryName)throw new Error('No Summary sheet found');
-    const ws=wb.Sheets[summaryName];
-    const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
-    let headerRow=-1;
-    for(let i=0;i<rows.length;i++){if(rows[i].some(c=>String(c).toLowerCase()==='month')){headerRow=i;break;}}
-    if(headerRow===-1)throw new Error('Could not find header row in Summary sheet');
-    const headers=rows[headerRow].map(h=>String(h).trim());
-    const monthCol=headers.indexOf('Month');
-    const incomeCol=headers.findIndex(h=>h.toLowerCase().includes('total income'));
-    const expenseCol=headers.findIndex(h=>h.toLowerCase().includes('total expenses'));
-    const openingCol=headers.findIndex(h=>h.toLowerCase().includes('opening'));
-    const closingCol=headers.findIndex(h=>h.toLowerCase().includes('closing'));
-    const catCols=[];
-    for(let c=incomeCol+1;c<expenseCol;c++){if(headers[c])catCols.push({name:headers[c],col:c});}
-    const monthData=[];
-    for(let r=headerRow+1;r<rows.length;r++){
-      const row=rows[r];
-      const month=String(row[monthCol]||'').trim();
-      if(!month||month.toUpperCase()==='TOTAL'||month.startsWith('Year')||month.startsWith('—'))continue;
-      if(!MONTHS.includes(month))continue;
-      monthData.push({month,income:num(row[incomeCol]),totalExp:num(row[expenseCol]),cats:catCols.map(c=>({name:c.name,amount:num(row[c.col])}))});
-    }
-    if(!monthData.length)throw new Error('No month data found in Summary sheet');
-
-    // Build journal totals
-    const totals={};let totalIncome=0;
-    monthData.forEach(m=>{totalIncome+=m.income;m.cats.forEach(c=>{if(!totals[c.name])totals[c.name]=0;totals[c.name]+=c.amount;});});
-
-    // Year opening/closing — scan all cells in each row for year balance labels
-    let yearOpening=0,yearClosing=0;
-    for(let r=0;r<rows.length;r++){
-      const row=rows[r];
-      for(let c=0;c<row.length;c++){
-        const label=String(row[c]||'').toLowerCase();
-        if(label.includes('year opening')&&row[c+1]!=null)yearOpening=num(row[c+1]);
-        if(label.includes('year closing')&&row[c+1]!=null)yearClosing=num(row[c+1]);
-      }
-    }
-    // Fallback: use first/last month opening/closing from data rows
-    if(!yearOpening){
-      const firstMthRow=rows.slice(headerRow+1).find(r=>MONTHS.includes(String(r[monthCol]||'').trim()));
-      if(firstMthRow&&openingCol>-1)yearOpening=num(firstMthRow[openingCol]);
-    }
-    if(!yearClosing){
-      for(let r=rows.length-1;r>headerRow;r--){
-        if(MONTHS.includes(String(rows[r][monthCol]||'').trim())&&closingCol>-1){yearClosing=num(rows[r][closingCol]);break;}
-      }
-    }
-    // Bank = net movement: total income - total expenses (not closing-opening, as closing-opening includes non-cash items)
-    // Actually bank = closing - opening is correct for cash book
-    // But if formulas haven't recalculated, use totals instead
-    const calculatedClosing=yearOpening+totalIncome-Object.values(totals).reduce((s,v)=>s+v,0);
-    if(!yearClosing)yearClosing=calculatedClosing;
-
-    journalRows=[];
-    journalRows.push({desc:'Sales / Income',debit:'',credit:fmt(totalIncome)});
-    Object.entries(totals).filter(([,v])=>v>0).forEach(([cat,amt])=>journalRows.push({desc:cat,debit:fmt(amt),credit:''}));
-    // Bank is the balancing figure: total credits - total debits of all other lines
-    const otherDebits=Object.values(totals).reduce((s,v)=>s+v,0);
-    const otherCredits=totalIncome;
-    const bankAmt=otherCredits-otherDebits;
-    if(bankAmt>=0){journalRows.push({desc:'Bank',debit:fmt(bankAmt),credit:''});}
-    else{journalRows.push({desc:'Bank',debit:'',credit:fmt(Math.abs(bankAmt))});}
-
-    const drTotal=journalRows.reduce((s,r)=>s+num(r.debit),0);
-    const crTotal=journalRows.reduce((s,r)=>s+num(r.credit),0);
-    const balanced=Math.abs(drTotal-crTotal)<0.02;
-
-    let html=`<div class="table-wrap"><table>
-      <thead><tr><th style="width:40px"></th><th>Description</th><th style="text-align:right;width:140px">Debit</th><th style="text-align:right;width:140px">Credit</th></tr></thead>
-      <tbody>${journalRows.map(r=>`<tr><td></td><td>${esc(r.desc)}</td>
-        <td style="text-align:right" class="${r.debit?'debit-val':''}">${r.debit?'£'+r.debit:''}</td>
-        <td style="text-align:right" class="${r.credit?'credit-val':''}">${r.credit?'£'+r.credit:''}</td></tr>`).join('')}
-      <tr class="total-row"><td></td><td><strong>TOTAL</strong></td>
-        <td style="text-align:right"><strong>£${fmt(drTotal)}</strong></td>
-        <td style="text-align:right"><strong>£${fmt(crTotal)}</strong></td></tr>
-      </tbody></table></div>
-      <div class="status ${balanced?'ok':'warn'}" style="margin-top:12px">
-        ${balanced?'✓ Journal balances':'⚠ Journal does not balance — difference: £'+fmt(Math.abs(drTotal-crTotal))}
-      </div>`;
-    document.getElementById('journalPreview').innerHTML=html;
-    document.getElementById('journalSection').style.display='block';
-    statusEl.innerHTML=`<div class="status ok">✓ Excel read — ${monthData.length} months, ${journalRows.length} journal lines</div>`;
-  }catch(err){statusEl.innerHTML=`<div class="status err">✗ ${err.message}</div>`;console.error(err);}
-}
-
-function downloadJournal(){
-  let csv=',Description,Debit,Credit\n';
-  // Strip commas from amounts so CSV doesn't break
-  const stripComma=v=>String(v).replace(/,/g,'');
-  journalRows.forEach(r=>csv+=`,"${r.desc}",${stripComma(r.debit)},${stripComma(r.credit)}\n`);
-  const dr=journalRows.reduce((s,r)=>s+num(r.debit),0);
-  const cr=journalRows.reduce((s,r)=>s+num(r.credit),0);
-  csv+=`,,${stripComma(fmt(dr))},${stripComma(fmt(cr))}\n`;
+  csv+=`,,${fmt(dr)},${fmt(cr)}\n`;
   dlFile('journal.csv',csv,'text/csv');
   showStatus('sb3','ok','✓ Journal downloaded — ready for IRIS TB Mapper');
 }
